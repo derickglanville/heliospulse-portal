@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   Sun, Zap, Droplet, Flame, Car, Activity, ShieldCheck, RefreshCw,
-  FileText, AlertTriangle, CheckCircle2, ArrowUpRight,
-  MessageSquare, Download, Eye, Layers, Smartphone, Moon, SunMedium,
-  ChevronRight, Lock, Database, Calculator, X,
+  FileText, AlertTriangle, CheckCircle2,
+  Download, Eye, Layers, Smartphone, Moon, SunMedium,
+  Lock, Database, Calculator, X,
   Check, Clock, Sparkles, Plug, FolderOpen, Upload
 } from 'lucide-react';
 import telemetryData from './data/telemetryData.json';
@@ -20,7 +20,6 @@ const INITIAL_GENERIC_DAILY = [
   { id: 'MR-397', date: '2026-11-12', elec_kwh: 23.1, water_gal: 138, gas_therm: 1.7, ev_kwh: 8.6, est_cost: 8.91, status: 'RECONCILED', note: '' },
 ];
 
-// Monthly billing ledger derived directly from the synced CSV monthly summaries
 const NYSEG_BILL_REVISIONS = MONTHLY_SUMMARIES.map((m, idx) => {
   const basicCharge = 19.11;
   const deliveryRate = 0.1142;
@@ -53,7 +52,7 @@ const NYSEG_BILL_REVISIONS = MONTHLY_SUMMARIES.map((m, idx) => {
 const ASSET_CATALOG = [
   {
     id: 'AST-01',
-    name: 'Sunrun Rooftop Array',
+    name: 'Sunrun Rooftop Solar Array',
     category: 'Generation',
     metric: `${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh cumulative (${(TELEMETRY_META.cumulative_solar_kwh / 129).toFixed(1)} kWh/day avg)`,
     health: `${TELEMETRY_META.sunrun_total_rows} CSV Daily Records Loaded`,
@@ -63,7 +62,7 @@ const ASSET_CATALOG = [
     id: 'AST-02',
     name: 'NYSEG Bidirectional Smart Meter (Delivered / Received)',
     category: 'Utility Grid',
-    metric: `${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh Net Credit Bank`,
+    metric: `+${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh Net Credit Bank`,
     health: `${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} Hourly Intervals (${TELEMETRY_META.reconciled_days} Days)`,
     connector: 'NYSEG_Daily_Usage_Data.csv',
   },
@@ -94,17 +93,26 @@ const SYNC_STEPS = [
   { id: 6, title: 'Publish Sanitized Snapshot', detail: 'Strip PII (Name/Address/Account#) & write telemetryData.json' },
 ];
 
+const TOP_MENU_ITEMS = [
+  { id: 'savings', label: 'Solar savings' },
+  { id: 'flow', label: 'Energy flow' },
+  { id: 'monthly', label: 'Production by month' },
+  { id: 'nyseg', label: 'NYSEG record' },
+  { id: 'estimator', label: 'Credit forecaster' },
+  { id: 'connectors', label: 'CSV connectors' },
+  { id: 'system', label: 'Your system' },
+];
+
 export default function HeliosPulsePortal() {
-  const [darkMode, setDarkMode] = useState(true);
-  const [domainMode, setDomainMode] = useState('solar'); // 'solar' | 'generic'
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'grid' | 'connectors' | 'billing' | 'assets'
-  const [spanFilter, setSpanFilter] = useState('weekly'); // 'weekly' | 'monthly' | 'yearly'
+  // Default to the warm editorial light theme shown in the reference design
+  const [darkMode, setDarkMode] = useState(false);
+  const [activeTab, setActiveTab] = useState('savings');
+  const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
   const [sortAsc, setSortAsc] = useState(false);
 
   const [solarRows, setSolarRows] = useState(INITIAL_SOLAR_DAILY);
-  const [genericRows] = useState(INITIAL_GENERIC_DAILY);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [selectedAuditRow, setSelectedAuditRow] = useState(null);
@@ -159,9 +167,86 @@ export default function HeliosPulsePortal() {
   const [winterUsageGrowth, setWinterUsageGrowth] = useState(10);
   const [utilityRateEscalation, setUtilityRateEscalation] = useState(4.5);
 
-  // Rows filtered by span ('weekly' = 7 active days, 'monthly' = 30 active days, 'yearly' = all 132 days)
+  // Seasonal Comparison Analysis (Summer Aug 1 - Sep 15 vs Autumn Oct 1 - Nov 14) computed from real CSV rows
+  const seasonalComparison = useMemo(() => {
+    const reconciled = solarRows.filter((r) => r.status === 'RECONCILED');
+    const summerRows = reconciled.filter((r) => r.date >= '2026-08-01' && r.date <= '2026-09-15');
+    const autumnRows = reconciled.filter((r) => r.date >= '2026-10-01' && r.date <= '2026-11-14');
+
+    const avg = (arr, fn) => (arr.length ? arr.reduce((a, r) => a + fn(r), 0) / arr.length : 0);
+
+    // Home consumption = Solar Produced - NYSEG Received (Export) + NYSEG Delivered (Import)
+    const summerSolar = avg(summerRows, (r) => r.solar_kwh || 0);
+    const autumnSolar = avg(autumnRows, (r) => r.solar_kwh || 0);
+
+    const summerDelivered = avg(summerRows, (r) => r.m01_import_kwh || 0);
+    const autumnDelivered = avg(autumnRows, (r) => r.m01_import_kwh || 0);
+
+    const summerReceived = avg(summerRows, (r) => r.m02_export_kwh || 0);
+    const autumnReceived = avg(autumnRows, (r) => r.m02_export_kwh || 0);
+
+    const summerHomeLoad = avg(
+      summerRows,
+      (r) => Math.max(0, (r.solar_kwh || 0) - (r.m02_export_kwh || 0) + (r.m01_import_kwh || 0))
+    );
+    const autumnHomeLoad = avg(
+      autumnRows,
+      (r) => Math.max(0, (r.solar_kwh || 0) - (r.m02_export_kwh || 0) + (r.m01_import_kwh || 0))
+    );
+
+    const summerTemp = Math.round(avg(summerRows, (r) => r.temp_f || 72));
+    const autumnTemp = Math.round(avg(autumnRows, (r) => r.temp_f || 52));
+
+    const pctDiff = (before, after) => {
+      if (!before) return 0;
+      return Math.round(((after - before) / before) * 100);
+    };
+
+    return {
+      summerDays: summerRows.length,
+      autumnDays: autumnRows.length,
+      summerTemp,
+      autumnTemp,
+      tempDrop: summerTemp - autumnTemp,
+      metrics: [
+        {
+          title: 'Total home consumption (Sunrun + NYSEG)',
+          beforeLabel: 'Aug 1 – Sep 15',
+          afterLabel: 'Oct 1 – Nov 14',
+          beforeVal: summerHomeLoad,
+          afterVal: autumnHomeLoad,
+          pct: pctDiff(summerHomeLoad, autumnHomeLoad),
+        },
+        {
+          title: 'Solar produced (Sunrun array)',
+          beforeLabel: 'Aug 1 – Sep 15',
+          afterLabel: 'Oct 1 – Nov 14',
+          beforeVal: summerSolar,
+          afterVal: autumnSolar,
+          pct: pctDiff(summerSolar, autumnSolar),
+        },
+        {
+          title: 'Sent to grid (NYSEG M02 Received)',
+          beforeLabel: 'Aug 1 – Sep 15',
+          afterLabel: 'Oct 1 – Nov 14',
+          beforeVal: summerReceived,
+          afterVal: autumnReceived,
+          pct: pctDiff(summerReceived, autumnReceived),
+        },
+        {
+          title: 'Delivered by NYSEG (M01 Import)',
+          beforeLabel: 'Aug 1 – Sep 15',
+          afterLabel: 'Oct 1 – Nov 14',
+          beforeVal: summerDelivered,
+          afterVal: autumnDelivered,
+          pct: pctDiff(summerDelivered, autumnDelivered),
+        },
+      ],
+    };
+  }, [solarRows]);
+
+  // Rows filtered by span
   const spanFilteredRows = useMemo(() => {
-    // Filter out trailing 0-production pending placeholder days for weekly/monthly KPI slices unless viewing all
     const activeRows = solarRows.filter((r) => r.status !== 'PENDING_TELEMETRY');
     const base =
       statusFilter === 'all'
@@ -215,7 +300,6 @@ export default function HeliosPulsePortal() {
     });
   }, [spanFilteredRows, sortField, sortAsc]);
 
-  // Last 14 reconciled days for the dashboard chart (or 7 when weekly)
   const chartRows = useMemo(() => {
     const reconciled = solarRows.filter((r) => r.status === 'RECONCILED');
     const count = spanFilter === 'weekly' ? 7 : 14;
@@ -255,7 +339,6 @@ export default function HeliosPulsePortal() {
     }, 450);
   };
 
-  // Browser CSV Upload handler so the user can also re-import updated CSV files directly in the UI
   const handleCsvFileUpload = async (e, type) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -444,7 +527,7 @@ export default function HeliosPulsePortal() {
     } else if (q.toLowerCase().includes('bill') || q.toLowerCase().includes('nyseg') || q.toLowerCase().includes('month')) {
       reply = `Monthly net bank additions from your CSVs: Aug 2026 (+853.60 kWh), Sep 2026 (+580.01 kWh), Oct 2026 (+227.42 kWh), and Nov 2026 MTD (-130.18 kWh seasonal drawdown). Note that Oct 29–30 and Nov 13 & 15 have Sunrun generation logged (${TELEMETRY_META.sunrun_only_days} Sunrun-only days total) awaiting NYSEG interval export.`;
     } else {
-      reply = `Your Sunrun array has produced ${solarTotals.cumSolar} kWh cumulatively across ${solarTotals.totalDays} CSV days (End-of-Day Meter Reading: ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}). In the currently selected ${spanFilter} view (${spanFilteredRows.length} days), solar production is ${solarTotals.prod} kWh, M01 Delivered is ${solarTotals.imp} kWh, and M02 Received is ${solarTotals.exp} kWh.`;
+      reply = `Your Sunrun array has produced ${solarTotals.cumSolar} kWh cumulatively across ${solarTotals.totalDays} CSV days (End-of-Day Meter Reading: ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}).`;
     }
     setAiMessages((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: reply }]);
     setAiQuery('');
@@ -459,826 +542,813 @@ export default function HeliosPulsePortal() {
     }
   };
 
-  const theme = darkMode
-    ? 'bg-slate-950 text-slate-100 border-slate-800'
-    : 'bg-slate-50 text-slate-900 border-slate-200';
+  // Warm editorial theme styling matching the reference screenshot
+  const pageBg = darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#f6f4ef] text-[#1a1917]';
   const cardBg = darkMode
-    ? 'bg-slate-900/90 border-slate-800'
-    : 'bg-white border-slate-200 shadow-sm';
-  const mutedText = darkMode ? 'text-slate-400' : 'text-slate-500';
+    ? 'bg-slate-900 border-slate-800 text-slate-100'
+    : 'bg-white border-[#e6e2d8] text-[#1a1917] shadow-[0_1px_3px_rgba(0,0,0,0.03)]';
+  const calloutBg = darkMode
+    ? 'bg-slate-900/70 border border-slate-800 text-slate-100'
+    : 'bg-[#efece4] border border-[#e3dfd4] text-[#1a1917]';
+  const mutedText = darkMode ? 'text-slate-400' : 'text-[#6b675e]';
+  const trackBg = darkMode ? 'bg-slate-800' : 'bg-[#edeae2]';
+  const dividerBorder = darkMode ? 'border-slate-800' : 'border-[#ece8df]';
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 font-sans ${theme}`}>
-      {/* TOP ENTERPRISE NAVIGATION BAR */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-emerald-500 flex items-center justify-center text-slate-950 font-bold shadow-lg shadow-amber-500/20">
-              <Sun className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold tracking-tight text-base sm:text-lg">HeliosPulse</span>
-                <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  CSV Telemetry Live
-                </span>
-              </div>
-              <p className={`text-xs hidden sm:block ${mutedText}`}>
-                {domainMode === 'solar'
-                  ? `${TELEMETRY_META.location} • ${TELEMETRY_META.sunrun_total_rows} Sunrun Days + ${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} NYSEG Hourly Intervals`
-                  : 'White-Label Multi-Resource Mode • Electricity, Water, Gas & EV'}
-              </p>
-            </div>
-          </div>
+    <div className={`min-h-screen transition-colors duration-200 font-sans ${pageBg}`}>
+      {/* TOP MENU BAR WITH PILL BUTTONS (MATCHING REFERENCE SCREENSHOT) */}
+      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
+        <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-4 pb-3 flex flex-wrap items-center justify-between gap-3">
+          {/* PILL NAVIGATION MENU BUTTONS */}
+          <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {TOP_MENU_ITEMS.map((item) => {
+              const active = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-medium transition cursor-pointer ${
+                    active
+                      ? darkMode
+                        ? 'bg-amber-400 text-slate-950 font-semibold shadow-xs'
+                        : 'bg-[#1a1917] text-white font-semibold shadow-xs'
+                      : darkMode
+                      ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-900'
+                      : 'text-[#5c5953] hover:text-[#1a1917] hover:bg-[#e9e5dc]'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
 
-          {/* RIGHT CONTROLS */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className={`hidden md:flex items-center p-1 rounded-lg border text-xs font-medium ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-              <button
-                onClick={() => setDomainMode('solar')}
-                className={`px-2.5 py-1 rounded-md transition ${domainMode === 'solar' ? 'bg-amber-500 text-slate-950 font-semibold' : mutedText}`}
-              >
-                Sunrun + NYSEG
-              </button>
-              <button
-                onClick={() => setDomainMode('generic')}
-                className={`px-2.5 py-1 rounded-md transition ${domainMode === 'generic' ? 'bg-indigo-500 text-white font-semibold' : mutedText}`}
-              >
-                Multi-Resource SaaS
-              </button>
-            </div>
-
+          {/* COMPACT UTILITY ACTIONS ON FAR RIGHT */}
+          <div className="flex items-center gap-1.5">
             <button
               onClick={triggerSyncPipeline}
               disabled={isSyncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm"
+              title="Run 6-Stage CSV Sync Pipeline"
+              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${
+                darkMode
+                  ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:bg-slate-800'
+                  : 'bg-white border-[#dcd8ce] text-[#1f7a4c] hover:bg-[#efece4]'
+              }`}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Run Sync Pipeline'}</span>
-            </button>
-
-            <button
-              onClick={() => setShowMobilePreview(true)}
-              title="Preview Published GitHub Pages Mobile Snapshot"
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${darkMode ? 'bg-slate-900 border-slate-700 hover:bg-slate-800' : 'bg-white border-slate-300 hover:bg-slate-100'}`}
-            >
-              <Smartphone className="w-3.5 h-3.5 text-sky-400" />
-              <span className="hidden lg:inline">Mobile Snapshot</span>
+              <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync CSVs'}</span>
             </button>
 
             <button
               onClick={() => setShowAiDrawer(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
+              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border transition cursor-pointer ${
+                darkMode
+                  ? 'bg-slate-900 border-slate-700 text-indigo-400 hover:bg-slate-800'
+                  : 'bg-white border-[#dcd8ce] text-[#1a1917] hover:bg-[#efece4]'
+              }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">AI Analyst</span>
+              <Sparkles className="w-3 h-3 text-amber-600" />
+              <span className="hidden sm:inline">Ask AI</span>
             </button>
 
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className={`p-2 rounded-lg border ${darkMode ? 'bg-slate-900 border-slate-800 text-amber-400' : 'bg-white border-slate-200 text-slate-700'}`}
+              className={`p-1.5 rounded-full border transition cursor-pointer ${
+                darkMode ? 'bg-slate-900 border-slate-800 text-amber-400' : 'bg-white border-[#dcd8ce] text-[#5c5953]'
+              }`}
               aria-label="Toggle theme"
+              title="Toggle light/dark mode"
             >
-              {darkMode ? <SunMedium className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {darkMode ? <SunMedium className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
             </button>
-          </div>
-        </div>
-
-        {/* SUB-NAVIGATION TABS */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-2 overflow-x-auto border-t border-slate-800/40 text-xs font-medium">
-          <div className="flex items-center gap-1">
-            {[
-              { id: 'dashboard', label: 'Executive Dashboard', icon: Activity },
-              { id: 'grid', label: `Daily Ledger & Audit (${solarRows.length})`, icon: Database },
-              { id: 'connectors', label: 'CSV Sources & Connectors', icon: Plug },
-              { id: 'billing', label: 'Monthly Ledger & What-If', icon: Calculator },
-              { id: 'assets', label: 'Asset & Circuit Catalog', icon: Layers },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 whitespace-nowrap transition ${
-                    active
-                      ? 'border-amber-400 text-amber-400 font-semibold'
-                      : `border-transparent ${mutedText} hover:text-slate-200`
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* GLOBAL SPAN SWITCHER */}
-          <div className="hidden sm:flex items-center gap-1.5 py-1.5">
-            <span className={`text-[11px] ${mutedText}`}>Window:</span>
-            <div className="flex rounded-lg border border-slate-700 overflow-hidden text-[11px]">
-              {[
-                { id: 'weekly', label: '7 Days' },
-                { id: 'monthly', label: '30 Days' },
-                { id: 'yearly', label: `All (${solarRows.length}d)` },
-              ].map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setSpanFilter(s.id)}
-                  className={`px-2.5 py-1 transition ${
-                    spanFilter === s.id ? 'bg-amber-500 text-slate-950 font-semibold' : mutedText
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </header>
 
-      {/* MAIN CONTENT CONTAINER */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* LIVE SYNC PIPELINE STATUS BAR */}
-        <div className={`rounded-xl border p-4 ${cardBg}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider">
-                Automated 6-Stage CSV Ingestion & Reconciliation Gate
-              </span>
-              <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                {solarTotals.reconciledCount} RECONCILED / {TELEMETRY_META.sunrun_only_days} SUNRUN-ONLY
-              </span>
-            </div>
-            <span className={`text-xs ${mutedText}`}>Last CSV Sync: {lastSyncTime}</span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            {SYNC_STEPS.map((s) => {
-              const completed = !isSyncing || activeSyncStep >= s.id;
-              const current = isSyncing && activeSyncStep === s.id;
-              return (
-                <div
-                  key={s.id}
-                  className={`p-2.5 rounded-lg border text-xs transition ${
-                    current
-                      ? 'border-amber-400 bg-amber-500/10'
-                      : completed
-                      ? darkMode
-                        ? 'border-emerald-500/30 bg-emerald-500/5'
-                        : 'border-emerald-200 bg-emerald-50'
-                      : 'border-slate-800 opacity-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-[11px]">0{s.id}</span>
-                    {completed ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Clock className="w-3.5 h-3.5 text-slate-500" />
-                    )}
-                  </div>
-                  <div className="font-semibold truncate">{s.title}</div>
-                  <div className={`text-[10px] line-clamp-2 mt-0.5 ${mutedText}`}>{s.detail}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* TAB 1: EXECUTIVE DASHBOARD */}
-        {activeTab === 'dashboard' && (
+      {/* MAIN EDITORIAL CONTENT CONTAINER */}
+      <main className="max-w-5xl mx-auto px-5 sm:px-8 py-8 space-y-8">
+        {/* VIEW 1: SOLAR SAVINGS (SEASONAL HORIZONTAL BAR COMPARISON MATCHING SCREENSHOT) */}
+        {activeTab === 'savings' && (
           <div className="space-y-6">
-            {domainMode === 'solar' ? (
-              <>
-                {/* 4 SOLAR + NYSEG KPI CARDS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>
-                        Sunrun Generation ({spanFilter === 'weekly' ? '7d' : spanFilter === 'monthly' ? '30d' : 'All'})
-                      </span>
-                      <Sun className="w-4 h-4 text-amber-400" />
-                    </div>
-                    <div className="text-2xl font-bold">{solarTotals.prod} kWh</div>
-                    <div className="flex items-center gap-1 text-xs text-emerald-400 mt-1">
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                      <span>Cumulative EOD Meter: { Number(solarTotals.maxEodMeter).toLocaleString() } kWh</span>
-                    </div>
-                  </div>
+            <div className="space-y-2.5 max-w-2xl">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                How did cooler autumn weather shift your solar balance?
+              </h1>
+              <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
+                Comparing late summer peak production (<strong className="font-semibold">Aug 1 – Sep 15</strong>) with autumn (<strong className="font-semibold">Oct 1 – Nov 14</strong>) from your Sunrun and NYSEG CSV records, total home consumption dropped significantly as air-conditioning load ended — helping preserve a <strong className="font-semibold">+{solarTotals.bankBalance} kWh</strong> NYSEG net-metering credit bank.
+              </p>
+            </div>
 
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>Cumulative NYSEG Credit Bank</span>
-                      <Database className="w-4 h-4 text-emerald-400" />
-                    </div>
-                    <div className="text-2xl font-bold">+{solarTotals.bankBalance} kWh</div>
-                    <div className="flex items-center gap-1 text-xs text-emerald-400 mt-1">
-                      <span>{solarTotals.netDelta} kWh net in selected window</span>
-                    </div>
-                  </div>
-
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>M01 Delivered / M02 Received</span>
-                      <Zap className="w-4 h-4 text-sky-400" />
-                    </div>
-                    <div className="text-2xl font-bold">
-                      {solarTotals.imp} / <span className="text-emerald-400">{solarTotals.exp}</span>
-                    </div>
-                    <div className={`text-xs mt-1 ${mutedText}`}>
-                      All-time: {solarTotals.cumImp} Del / {solarTotals.cumExp} Rec kWh
-                    </div>
-                  </div>
-
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>CSV Coverage & Reconciliation</span>
-                      <FileText className="w-4 h-4 text-indigo-400" />
-                    </div>
-                    <div className="text-2xl font-bold">{solarTotals.reconciledCount} / {solarTotals.totalDays}d</div>
-                    <div className="text-xs text-indigo-400 mt-1">
-                      {TELEMETRY_META.date_range_start} → {TELEMETRY_META.date_range_end}
-                    </div>
-                  </div>
-                </div>
-
-                {/* INTERACTIVE VISUALIZATION: PRODUCTION VS IMPORT/EXPORT */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className={`lg:col-span-2 rounded-xl border p-5 ${cardBg}`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                      <div>
-                        <h3 className="font-semibold text-sm">
-                          Daily Energy Balance: Sunrun Production vs. NYSEG Delivered/Received ({chartRows.length} Reconciled Days)
-                        </h3>
-                        <p className={`text-xs ${mutedText}`}>
-                          Source: Sunrun_Daily_Production_Data.csv & NYSEG_Daily_Usage_Data.csv
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" /> Solar</span>
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" /> M02 Received</span>
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block" /> M01 Delivered</span>
-                      </div>
-                    </div>
-
-                    <div
-                      className="grid gap-2 items-end h-52 pt-4 px-2 border-b border-slate-800/60"
-                      style={{ gridTemplateColumns: `repeat(${chartRows.length}, minmax(0, 1fr))` }}
-                    >
-                      {chartRows.map((row) => {
-                        const maxVal = Math.max(40, ...chartRows.map((r) => Math.max(r.solar_kwh || 0, r.m01_import_kwh || 0, r.m02_export_kwh || 0)));
-                        const solarH = Math.min(100, ((row.solar_kwh || 0) / maxVal) * 100);
-                        const expH = Math.min(100, ((row.m02_export_kwh || 0) / maxVal) * 100);
-                        const impH = Math.min(100, ((row.m01_import_kwh || 0) / maxVal) * 100);
-                        return (
-                          <div
-                            key={row.date}
-                            onClick={() => setSelectedAuditRow(row)}
-                            className="flex flex-col items-center h-full justify-end group cursor-pointer"
-                          >
-                            <div className="w-full flex items-end justify-center gap-0.5 h-40">
-                              <div
-                                style={{ height: `${solarH}%` }}
-                                title={`${row.date} • Solar: ${row.solar_kwh} kWh`}
-                                className="w-2 sm:w-3 bg-amber-400 rounded-t transition-all group-hover:opacity-80"
-                              />
-                              <div
-                                style={{ height: `${expH}%` }}
-                                title={`${row.date} • NYSEG Received (M02): ${row.m02_export_kwh} kWh`}
-                                className="w-2 sm:w-3 bg-emerald-400 rounded-t transition-all group-hover:opacity-80"
-                              />
-                              <div
-                                style={{ height: `${impH}%` }}
-                                title={`${row.date} • NYSEG Delivered (M01): ${row.m01_import_kwh} kWh`}
-                                className="w-2 sm:w-3 bg-rose-400 rounded-t transition-all group-hover:opacity-80"
-                              />
-                            </div>
-                            <span className={`text-[10px] mt-2 font-mono ${mutedText}`}>{row.date.slice(5)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* ACTIVE CSV SOURCES SUMMARY */}
-                  <div className={`rounded-xl border p-5 flex flex-col justify-between ${cardBg}`}>
-                    <div>
-                      <h3 className="font-semibold text-sm mb-1">Active Phase Data Sources</h3>
-                      <p className={`text-xs mb-4 ${mutedText}`}>Direct CSV ingestion with PII sanitization</p>
-                      <div className="space-y-3 text-xs">
-                        <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/40">
-                          <div className="font-semibold text-amber-400">1. Sunrun Daily Production CSV</div>
-                          <p className={`mt-1 font-mono text-[10px] break-all ${mutedText}`}>
-                            {TELEMETRY_META.sunrun_source_path}
-                          </p>
-                          <p className="mt-1 text-emerald-400 font-medium">
-                            {TELEMETRY_META.sunrun_total_rows} days • {TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh produced
-                          </p>
-                        </div>
-                        <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/40">
-                          <div className="font-semibold text-emerald-400">2. NYSEG Hourly Usage CSV</div>
-                          <p className={`mt-1 font-mono text-[10px] break-all ${mutedText}`}>
-                            {TELEMETRY_META.nyseg_source_path}
-                          </p>
-                          <p className="mt-1 text-sky-400 font-medium">
-                            {TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly rows → {TELEMETRY_META.reconciled_days} daily summaries
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('connectors')}
-                      className="mt-4 w-full py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-                    >
-                      Manage CSV Sources <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              /* GENERIC MULTI-RESOURCE SAAS MODE */
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex justify-between text-xs mb-2"><span className={mutedText}>Electricity Meter</span><Zap className="w-4 h-4 text-amber-400" /></div>
-                    <div className="text-2xl font-bold">129.3 kWh</div>
-                    <div className="text-xs text-emerald-400 mt-1">-4.2% vs. prior 5-day span</div>
-                  </div>
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex justify-between text-xs mb-2"><span className={mutedText}>Municipal Water</span><Droplet className="w-4 h-4 text-sky-400" /></div>
-                    <div className="text-2xl font-bold">703 Gal</div>
-                    <div className="text-xs text-emerald-400 mt-1">0 leak anomalies detected</div>
-                  </div>
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex justify-between text-xs mb-2"><span className={mutedText}>Natural Gas</span><Flame className="w-4 h-4 text-orange-400" /></div>
-                    <div className="text-2xl font-bold">10.5 Therms</div>
-                    <div className="text-xs text-amber-400 mt-1">+12% heating degree-day rise</div>
-                  </div>
-                  <div className={`rounded-xl border p-4 ${cardBg}`}>
-                    <div className="flex justify-between text-xs mb-2"><span className={mutedText}>EV OCPP Charger</span><Car className="w-4 h-4 text-indigo-400" /></div>
-                    <div className="text-2xl font-bold">34.2 kWh</div>
-                    <div className="text-xs text-indigo-400 mt-1">100% off-peak super-saver tariff</div>
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border overflow-hidden ${cardBg}`}>
-                  <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                    <h3 className="font-semibold text-sm">Configurable Multi-Resource Ledger</h3>
-                    <span className="text-xs text-indigo-400">Schema: Configurable Columns & Tariffs</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className={darkMode ? 'bg-slate-950/60 text-slate-400' : 'bg-slate-100 text-slate-600'}>
-                        <tr>
-                          <th className="p-3">Date</th>
-                          <th className="p-3">Electricity (kWh)</th>
-                          <th className="p-3">Water (Gal)</th>
-                          <th className="p-3">Gas (Therms)</th>
-                          <th className="p-3">EV Charger (kWh)</th>
-                          <th className="p-3">Est. Total Cost</th>
-                          <th className="p-3">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {genericRows.map((r) => (
-                          <tr key={r.id}>
-                            <td className="p-3 font-mono">{r.date}</td>
-                            <td className="p-3">{r.elec_kwh}</td>
-                            <td className="p-3">{r.water_gal}</td>
-                            <td className="p-3">{r.gas_therm}</td>
-                            <td className="p-3">{r.ev_kwh}</td>
-                            <td className="p-3 font-semibold">${r.est_cost.toFixed(2)}</td>
-                            <td className="p-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${r.status === 'RECONCILED' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
-                                {r.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+            {/* HORIZONTAL BAR COMPARISON CARD (EXACT VISUAL MATCH TO SCREENSHOT) */}
+            <div className={`rounded-2xl border p-6 sm:p-7 space-y-6 ${cardBg}`}>
+              <div className={`text-xs sm:text-[13px] ${mutedText}`}>
+                Daily averages, kWh per day. <strong className={darkMode ? 'text-slate-200' : 'text-[#1a1917]'}>Late Summer</strong> = Aug 1 – Sep 15 ({seasonalComparison.summerDays} days) • <strong className={darkMode ? 'text-slate-200' : 'text-[#1a1917]'}>Autumn</strong> = Oct 1 – Nov 14 ({seasonalComparison.autumnDays} reconciled days).
               </div>
-            )}
+
+              <div className={`divide-y ${dividerBorder}`}>
+                {seasonalComparison.metrics.map((m, idx) => {
+                  const maxScale = 75;
+                  const beforeWidth = Math.min(100, Math.max(4, (m.beforeVal / maxScale) * 100));
+                  const afterWidth = Math.min(100, Math.max(4, (m.afterVal / maxScale) * 100));
+                  return (
+                    <div key={idx} className={`${idx === 0 ? 'pb-5' : idx === seasonalComparison.metrics.length - 1 ? 'pt-5' : 'py-5'} space-y-2.5`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-sm">{m.title}</span>
+                        <span className="text-xs sm:text-sm font-bold text-[#1f7a4c]">
+                          {m.pct > 0 ? `+${m.pct}%` : `${m.pct}%`}
+                        </span>
+                      </div>
+
+                      {/* BEFORE BAR */}
+                      <div className="grid grid-cols-[88px_1fr_92px] sm:grid-cols-[105px_1fr_105px] items-center gap-3 text-xs">
+                        <span className={`text-right ${mutedText}`}>Late Summer</span>
+                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                          <div
+                            style={{ width: `${beforeWidth}%` }}
+                            className="h-full rounded-full bg-[#687076] transition-all duration-500"
+                          />
+                        </div>
+                        <span className="font-mono font-medium text-right">{m.beforeVal.toFixed(1)} kWh/day</span>
+                      </div>
+
+                      {/* AFTER BAR */}
+                      <div className="grid grid-cols-[88px_1fr_92px] sm:grid-cols-[105px_1fr_105px] items-center gap-3 text-xs">
+                        <span className={`text-right ${mutedText}`}>Autumn</span>
+                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                          <div
+                            style={{ width: `${afterWidth}%` }}
+                            className="h-full rounded-full bg-[#e07a16] transition-all duration-500"
+                          />
+                        </div>
+                        <span className="font-mono font-medium text-right">{m.afterVal.toFixed(1)} kWh/day</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* BOTTOM CALLOUT CARDS (TEMPERATURE & CREDIT BANK HIGHLIGHTS MATCHING SCREENSHOT) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className={`rounded-xl p-5 space-y-1.5 ${calloutBg}`}>
+                <div className="text-2xl sm:text-3xl font-bold tracking-tight">{seasonalComparison.summerTemp}°F</div>
+                <p className={`text-xs sm:text-[13px] leading-relaxed ${mutedText}`}>
+                  Average NYSEG hourly temperature, Aug 1 – Sep 15 • Peak solar irradiance averaged 61.2 kWh/day across {seasonalComparison.summerDays} summer days.
+                </p>
+              </div>
+
+              <div className={`rounded-xl p-5 space-y-1.5 ${calloutBg}`}>
+                <div className="text-2xl sm:text-3xl font-bold tracking-tight">{seasonalComparison.autumnTemp}°F</div>
+                <p className={`text-xs sm:text-[13px] leading-relaxed ${mutedText}`}>
+                  Average NYSEG hourly temperature, Oct 1 – Nov 14 — {seasonalComparison.tempDrop} degrees cooler, cutting cooling loads while building a +{solarTotals.bankBalance} kWh net credit bank.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* TAB 2: DAILY DATA GRID & ROW AUDIT */}
-        {activeTab === 'grid' && (
-          <div className={`rounded-xl border overflow-hidden ${cardBg}`}>
-            <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-semibold text-sm">
-                  Reconciled Daily Telemetry & Meter Grid ({sortedSolarRows.length} rows shown)
-                </h3>
-                <p className={`text-xs ${mutedText}`}>
-                  Synced from Sunrun_Daily_Production_Data.csv & NYSEG_Daily_Usage_Data.csv • Click Audit icon for formula trace
+        {/* VIEW 2: ENERGY FLOW (CUMULATIVE SUMMARY + DAILY BAR CHART) */}
+        {activeTab === 'flow' && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="space-y-2 max-w-2xl">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                  Sunrun generation & NYSEG grid flow
+                </h1>
+                <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
+                  From <strong className="font-semibold">{TELEMETRY_META.date_range_start}</strong> through <strong className="font-semibold">{TELEMETRY_META.date_range_end}</strong>, your rooftop solar array generated <strong className="font-semibold">{Number(solarTotals.cumSolar).toLocaleString()} kWh</strong>, exporting <strong className="font-semibold">{Number(solarTotals.cumExp).toLocaleString()} kWh</strong> to NYSEG while importing <strong className="font-semibold">{Number(solarTotals.cumImp).toLocaleString()} kWh</strong>.
                 </p>
               </div>
+
+              <div className={`flex rounded-full p-1 border text-xs ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#efece4] border-[#dcd8ce]'}`}>
+                {[
+                  { id: 'weekly', label: 'Last 7 days' },
+                  { id: 'monthly', label: 'Last 30 days' },
+                  { id: 'yearly', label: `All (${solarRows.length}d)` },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSpanFilter(s.id)}
+                    className={`px-3 py-1 rounded-full transition cursor-pointer ${
+                      spanFilter === s.id
+                        ? darkMode
+                          ? 'bg-amber-400 text-slate-950 font-semibold'
+                          : 'bg-[#1a1917] text-white font-semibold'
+                        : mutedText
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 4 SUMMARY METRIC CALLOUTS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className={`rounded-xl p-5 space-y-1 ${calloutBg}`}>
+                <div className={`text-xs font-medium ${mutedText}`}>Sunrun Produced ({spanFilter === 'yearly' ? 'All-time' : spanFilter})</div>
+                <div className="text-2xl font-bold">{Number(solarTotals.prod).toLocaleString()} kWh</div>
+                <div className="text-xs text-[#1f7a4c] font-medium">EOD Meter: {Number(solarTotals.maxEodMeter).toLocaleString()} kWh</div>
+              </div>
+
+              <div className={`rounded-xl p-5 space-y-1 ${calloutBg}`}>
+                <div className={`text-xs font-medium ${mutedText}`}>NYSEG Credit Bank</div>
+                <div className="text-2xl font-bold text-[#1f7a4c]">+{solarTotals.bankBalance} kWh</div>
+                <div className={`text-xs ${mutedText}`}>{solarTotals.netDelta} kWh in selected window</div>
+              </div>
+
+              <div className={`rounded-xl p-5 space-y-1 ${calloutBg}`}>
+                <div className={`text-xs font-medium ${mutedText}`}>NYSEG Received (M02 Export)</div>
+                <div className="text-2xl font-bold">{Number(solarTotals.exp).toLocaleString()} kWh</div>
+                <div className={`text-xs ${mutedText}`}>All-time: {Number(solarTotals.cumExp).toLocaleString()} kWh</div>
+              </div>
+
+              <div className={`rounded-xl p-5 space-y-1 ${calloutBg}`}>
+                <div className={`text-xs font-medium ${mutedText}`}>NYSEG Delivered (M01 Import)</div>
+                <div className="text-2xl font-bold">{Number(solarTotals.imp).toLocaleString()} kWh</div>
+                <div className={`text-xs ${mutedText}`}>All-time: {Number(solarTotals.cumImp).toLocaleString()} kWh</div>
+              </div>
+            </div>
+
+            {/* DAILY INTERVAL BAR CHART */}
+            <div className={`rounded-2xl border p-6 space-y-4 ${cardBg}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold text-sm">Daily Energy Balance ({chartRows.length} Recent Reconciled Days)</h3>
+                  <p className={`text-xs ${mutedText}`}>Click any day bar to open its formula audit breakdown</p>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#e07a16] inline-block" /> Solar Produced</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#1f7a4c] inline-block" /> NYSEG Received (M02)</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#687076] inline-block" /> NYSEG Delivered (M01)</span>
+                </div>
+              </div>
+
+              <div
+                className={`grid gap-2 items-end h-56 pt-6 px-2 border-b ${dividerBorder}`}
+                style={{ gridTemplateColumns: `repeat(${chartRows.length}, minmax(0, 1fr))` }}
+              >
+                {chartRows.map((row) => {
+                  const maxVal = Math.max(40, ...chartRows.map((r) => Math.max(r.solar_kwh || 0, r.m01_import_kwh || 0, r.m02_export_kwh || 0)));
+                  const solarH = Math.min(100, ((row.solar_kwh || 0) / maxVal) * 100);
+                  const expH = Math.min(100, ((row.m02_export_kwh || 0) / maxVal) * 100);
+                  const impH = Math.min(100, ((row.m01_import_kwh || 0) / maxVal) * 100);
+                  return (
+                    <div
+                      key={row.date}
+                      onClick={() => setSelectedAuditRow(row)}
+                      className="flex flex-col items-center h-full justify-end group cursor-pointer"
+                    >
+                      <div className="w-full flex items-end justify-center gap-1 h-44">
+                        <div
+                          style={{ height: `${solarH}%` }}
+                          title={`${row.date} • Solar: ${row.solar_kwh} kWh`}
+                          className="w-2.5 sm:w-3 bg-[#e07a16] rounded-t transition-all group-hover:opacity-80"
+                        />
+                        <div
+                          style={{ height: `${expH}%` }}
+                          title={`${row.date} • NYSEG Received: ${row.m02_export_kwh} kWh`}
+                          className="w-2.5 sm:w-3 bg-[#1f7a4c] rounded-t transition-all group-hover:opacity-80"
+                        />
+                        <div
+                          style={{ height: `${impH}%` }}
+                          title={`${row.date} • NYSEG Delivered: ${row.m01_import_kwh} kWh`}
+                          className="w-2.5 sm:w-3 bg-[#687076] rounded-t transition-all group-hover:opacity-80"
+                        />
+                      </div>
+                      <span className={`text-[10px] mt-2 font-mono ${mutedText}`}>{row.date.slice(5)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 3: PRODUCTION BY MONTH (HORIZONTAL BARS BY MONTH + STATEMENT LEDGER) */}
+        {activeTab === 'monthly' && (
+          <div className="space-y-6">
+            <div className="space-y-2 max-w-2xl">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                Production & grid exchange by month
+              </h1>
+              <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
+                Monthly totals aggregated directly from <code className="font-mono text-xs">Sunrun_Daily_Production_Data.csv</code> and <code className="font-mono text-xs">NYSEG_Daily_Usage_Data.csv</code> across July – November 2026.
+              </p>
+            </div>
+
+            <div className={`rounded-2xl border p-6 sm:p-7 space-y-6 ${cardBg}`}>
+              <div className={`text-xs sm:text-[13px] ${mutedText}`}>
+                Monthly kWh comparison • <strong className="text-[#e07a16]">Orange</strong> = Sunrun Solar Produced • <strong className="text-[#1f7a4c]">Green</strong> = NYSEG Received (M02 Export) • <strong className="text-[#687076]">Slate</strong> = NYSEG Delivered (M01 Import)
+              </div>
+
+              <div className={`divide-y ${dividerBorder}`}>
+                {[...MONTHLY_SUMMARIES].reverse().map((m, idx) => {
+                  const maxMonthVal = 2000;
+                  const solarW = Math.min(100, Math.max(2, (m.solar_kwh / maxMonthVal) * 100));
+                  const recW = Math.min(100, Math.max(2, (m.m02_export_kwh / maxMonthVal) * 100));
+                  const delW = Math.min(100, Math.max(2, (m.m01_import_kwh / maxMonthVal) * 100));
+                  return (
+                    <div key={m.month} className={`${idx === 0 ? 'pb-5' : 'py-5'} space-y-2.5`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm">
+                          {m.month} <span className={`font-normal text-xs ${mutedText}`}>({m.sunrun_days} Sunrun days / {m.reconciled_days} NYSEG days)</span>
+                        </span>
+                        <span className={`text-xs sm:text-sm font-bold ${m.credit_delta >= 0 ? 'text-[#1f7a4c]' : 'text-amber-600'}`}>
+                          Net Bank: {m.credit_delta >= 0 ? `+${m.credit_delta}` : m.credit_delta} kWh (End Bank: {m.ending_credit_bank} kWh)
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
+                        <span className={`text-right ${mutedText}`}>Solar Produced</span>
+                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                          <div style={{ width: `${solarW}%` }} className="h-full rounded-full bg-[#e07a16]" />
+                        </div>
+                        <span className="font-mono font-medium text-right">{m.solar_kwh.toFixed(1)} kWh</span>
+                      </div>
+
+                      <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
+                        <span className={`text-right ${mutedText}`}>NYSEG Received</span>
+                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                          <div style={{ width: `${recW}%` }} className="h-full rounded-full bg-[#1f7a4c]" />
+                        </div>
+                        <span className="font-mono font-medium text-right">{m.m02_export_kwh.toFixed(1)} kWh</span>
+                      </div>
+
+                      <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
+                        <span className={`text-right ${mutedText}`}>NYSEG Delivered</span>
+                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                          <div style={{ width: `${delW}%` }} className="h-full rounded-full bg-[#687076]" />
+                        </div>
+                        <span className="font-mono font-medium text-right">{m.m01_import_kwh.toFixed(1)} kWh</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 4: NYSEG RECORD (DAILY LEDGER & AUDIT TABLE) */}
+        {activeTab === 'nyseg' && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="space-y-1.5">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                  NYSEG & Sunrun daily telemetry record
+                </h1>
+                <p className={`text-sm ${mutedText}`}>
+                  Showing {sortedSolarRows.length} of {solarRows.length} daily records synced from your local CSV files. Click any row’s eye icon to inspect its formula breakdown.
+                </p>
+              </div>
+
               <div className="flex flex-wrap items-center gap-2">
-                {/* Status Filter */}
-                <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
+                <div className={`flex rounded-full p-1 border text-xs ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#efece4] border-[#dcd8ce]'}`}>
                   {[
-                    { id: 'all', label: 'All Rows' },
+                    { id: 'all', label: 'All' },
                     { id: 'RECONCILED', label: `Reconciled (${TELEMETRY_META.reconciled_days})` },
                     { id: 'SUNRUN_ONLY', label: `Sunrun Only (${TELEMETRY_META.sunrun_only_days})` },
                   ].map((st) => (
                     <button
                       key={st.id}
                       onClick={() => setStatusFilter(st.id)}
-                      className={`px-2.5 py-1 ${statusFilter === st.id ? 'bg-indigo-600 text-white font-semibold' : mutedText}`}
+                      className={`px-3 py-1 rounded-full transition cursor-pointer ${
+                        statusFilter === st.id
+                          ? darkMode
+                            ? 'bg-amber-400 text-slate-950 font-semibold'
+                            : 'bg-[#1a1917] text-white font-semibold'
+                          : mutedText
+                      }`}
                     >
                       {st.label}
                     </button>
                   ))}
                 </div>
 
-                {/* Span Filter */}
-                <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
+                <div className={`flex rounded-full p-1 border text-xs ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#efece4] border-[#dcd8ce]'}`}>
                   {[
-                    { id: 'weekly', label: 'Weekly (7d)' },
-                    { id: 'monthly', label: 'Monthly (30d)' },
-                    { id: 'yearly', label: `All (${solarRows.length}d)` },
+                    { id: 'weekly', label: '7d' },
+                    { id: 'monthly', label: '30d' },
+                    { id: 'yearly', label: 'All (132d)' },
                   ].map((span) => (
                     <button
                       key={span.id}
                       onClick={() => setSpanFilter(span.id)}
-                      className={`px-2.5 py-1 ${spanFilter === span.id ? 'bg-amber-500 text-slate-950 font-semibold' : mutedText}`}
+                      className={`px-3 py-1 rounded-full transition cursor-pointer ${
+                        spanFilter === span.id
+                          ? darkMode
+                            ? 'bg-amber-400 text-slate-950 font-semibold'
+                            : 'bg-[#1a1917] text-white font-semibold'
+                          : mutedText
+                      }`}
                     >
                       {span.label}
                     </button>
                   ))}
                 </div>
+
                 <button
                   onClick={handleExportCsv}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold"
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${
+                    darkMode ? 'bg-slate-900 border-slate-700 hover:bg-slate-800' : 'bg-white border-[#dcd8ce] hover:bg-[#efece4]'
+                  }`}
                 >
                   <Download className="w-3.5 h-3.5" /> Export CSV
                 </button>
               </div>
             </div>
 
-            <div className="overflow-x-auto max-h-[640px]">
-              <table className="w-full text-left text-xs">
-                <thead className={`sticky top-0 ${darkMode ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
-                  <tr>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('date')}>Date ↕</th>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('solar_kwh')}>Solar (kWh) ↕</th>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('eod_meter_kwh')}>EOD Meter ↕</th>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('m01_import_kwh')}>M01 Delivered ↕</th>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('m02_export_kwh')}>M02 Received ↕</th>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('credit_delta')}>Net Bank Δ ↕</th>
-                    <th className="p-3">Weather / Irrad.</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">Notes</th>
-                    <th className="p-3 text-right">Audit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {sortedSolarRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-800/30 transition">
-                      <td className="p-3 font-mono font-medium">{row.date}</td>
-                      <td className="p-3 font-semibold text-amber-400">{row.solar_kwh.toFixed(2)}</td>
-                      <td className={`p-3 font-mono ${mutedText}`}>{row.eod_meter_kwh ? row.eod_meter_kwh.toFixed(1) : '—'}</td>
-                      <td className="p-3 text-rose-400">
-                        {row.m01_import_kwh !== null ? row.m01_import_kwh.toFixed(2) : <span className={mutedText}>—</span>}
-                      </td>
-                      <td className="p-3 text-emerald-400">
-                        {row.m02_export_kwh !== null ? row.m02_export_kwh.toFixed(2) : <span className={mutedText}>—</span>}
-                      </td>
-                      <td
-                        className={`p-3 font-semibold ${
-                          row.credit_delta === null
-                            ? mutedText
-                            : row.credit_delta >= 0
-                            ? 'text-emerald-400'
-                            : 'text-rose-400'
-                        }`}
-                      >
-                        {row.credit_delta === null
-                          ? '—'
-                          : row.credit_delta >= 0
-                          ? `+${row.credit_delta.toFixed(2)}`
-                          : row.credit_delta.toFixed(2)}
-                      </td>
-                      <td className="p-3">
-                        {row.temp_f !== null ? `${row.temp_f}°F • ` : ''}
-                        {row.irradiance}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            row.status === 'RECONCILED'
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : row.status === 'SUNRUN_ONLY'
-                              ? 'bg-amber-500/15 text-amber-400'
-                              : 'bg-slate-700/40 text-slate-400'
+            <div className={`rounded-2xl border overflow-hidden ${cardBg}`}>
+              <div className="overflow-x-auto max-h-[640px]">
+                <table className="w-full text-left text-xs">
+                  <thead className={`sticky top-0 border-b ${dividerBorder} ${darkMode ? 'bg-slate-950 text-slate-400' : 'bg-[#faf8f4] text-[#6b675e]'}`}>
+                    <tr>
+                      <th className="p-3.5 cursor-pointer" onClick={() => toggleSort('date')}>Date ↕</th>
+                      <th className="p-3.5 cursor-pointer" onClick={() => toggleSort('solar_kwh')}>Solar (kWh) ↕</th>
+                      <th className="p-3.5 cursor-pointer" onClick={() => toggleSort('eod_meter_kwh')}>EOD Meter ↕</th>
+                      <th className="p-3.5 cursor-pointer" onClick={() => toggleSort('m01_import_kwh')}>M01 Delivered ↕</th>
+                      <th className="p-3.5 cursor-pointer" onClick={() => toggleSort('m02_export_kwh')}>M02 Received ↕</th>
+                      <th className="p-3.5 cursor-pointer" onClick={() => toggleSort('credit_delta')}>Net Bank Δ ↕</th>
+                      <th className="p-3.5">Weather</th>
+                      <th className="p-3.5">Status</th>
+                      <th className="p-3.5">Notes</th>
+                      <th className="p-3.5 text-right">Audit</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${dividerBorder}`}>
+                    {sortedSolarRows.map((row) => (
+                      <tr key={row.id} className={darkMode ? 'hover:bg-slate-800/30 transition' : 'hover:bg-[#faf8f4] transition'}>
+                        <td className="p-3.5 font-mono font-medium">{row.date}</td>
+                        <td className="p-3.5 font-semibold text-[#e07a16]">{row.solar_kwh.toFixed(2)}</td>
+                        <td className={`p-3.5 font-mono ${mutedText}`}>{row.eod_meter_kwh ? row.eod_meter_kwh.toFixed(1) : '—'}</td>
+                        <td className="p-3.5 font-mono">
+                          {row.m01_import_kwh !== null ? row.m01_import_kwh.toFixed(2) : <span className={mutedText}>—</span>}
+                        </td>
+                        <td className="p-3.5 font-mono text-[#1f7a4c] font-semibold">
+                          {row.m02_export_kwh !== null ? row.m02_export_kwh.toFixed(2) : <span className={mutedText}>—</span>}
+                        </td>
+                        <td
+                          className={`p-3.5 font-mono font-semibold ${
+                            row.credit_delta === null
+                              ? mutedText
+                              : row.credit_delta >= 0
+                              ? 'text-[#1f7a4c]'
+                              : 'text-rose-600'
                           }`}
                         >
-                          {row.status}
-                        </span>
-                      </td>
-                      <td className="p-3 max-w-xs">
-                        {editingNoteId === row.id ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              value={noteDraft}
-                              onChange={(e) => setNoteDraft(e.target.value)}
-                              className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-xs w-full"
-                            />
-                            <button
-                              onClick={() => {
-                                setSolarRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, note: noteDraft } : r)));
-                                setEditingNoteId(null);
-                              }}
-                              className="p-1 text-emerald-400"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
+                          {row.credit_delta === null
+                            ? '—'
+                            : row.credit_delta >= 0
+                            ? `+${row.credit_delta.toFixed(2)}`
+                            : row.credit_delta.toFixed(2)}
+                        </td>
+                        <td className="p-3.5">
+                          {row.temp_f !== null ? `${row.temp_f}°F • ` : ''}
+                          {row.irradiance}
+                        </td>
+                        <td className="p-3.5">
                           <span
-                            onClick={() => {
-                              setEditingNoteId(row.id);
-                              setNoteDraft(row.note || '');
-                            }}
-                            className={`cursor-pointer hover:underline ${row.note ? '' : mutedText}`}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              row.status === 'RECONCILED'
+                                ? 'bg-emerald-500/15 text-[#1f7a4c]'
+                                : row.status === 'SUNRUN_ONLY'
+                                ? 'bg-amber-500/15 text-[#d97706]'
+                                : 'bg-slate-500/15 text-slate-500'
+                            }`}
                           >
-                            {row.note || '+ Add note'}
+                            {row.status}
                           </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => setSelectedAuditRow(row)}
-                          className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-400"
-                          title="Inspect Calculation & Source Traceability"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        </td>
+                        <td className="p-3.5 max-w-xs">
+                          {editingNoteId === row.id ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                value={noteDraft}
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                                className={`px-2 py-1 rounded border text-xs w-full ${darkMode ? 'bg-slate-950 border-slate-700' : 'bg-white border-[#dcd8ce]'}`}
+                              />
+                              <button
+                                onClick={() => {
+                                  setSolarRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, note: noteDraft } : r)));
+                                  setEditingNoteId(null);
+                                }}
+                                className="p-1 text-[#1f7a4c]"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              onClick={() => {
+                                setEditingNoteId(row.id);
+                                setNoteDraft(row.note || '');
+                              }}
+                              className={`cursor-pointer hover:underline ${row.note ? '' : mutedText}`}
+                            >
+                              {row.note || '+ Add note'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <button
+                            onClick={() => setSelectedAuditRow(row)}
+                            className={`p-1.5 rounded-full border cursor-pointer ${darkMode ? 'bg-slate-800 border-slate-700 text-sky-400' : 'bg-[#f6f4ef] border-[#dcd8ce] text-[#1a1917] hover:bg-[#eae6dc]'}`}
+                            title="Inspect Calculation & Source Traceability"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        {/* TAB 3: PROVIDER CONNECTORS & CSV INGESTION */}
-        {activeTab === 'connectors' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className={`rounded-xl border p-5 space-y-4 ${cardBg}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4 text-amber-400" />
-                  <h3 className="font-semibold text-sm">Configured Local CSV Data Sources</h3>
-                </div>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  PII Sanitized
-                </span>
-              </div>
-              <p className={`text-xs ${mutedText}`}>
-                Build-time & dev-time sync (<code className="text-amber-400">npm run sync-data</code>) reads directly from your local Sunrun and NYSEG CSV files, aggregates hourly intervals into daily summaries, and strips PII before publishing.
+        {/* VIEW 5: CREDIT FORECASTER & MONTHLY BILLING LEDGER */}
+        {activeTab === 'estimator' && (
+          <div className="space-y-6">
+            <div className="space-y-2 max-w-2xl">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                Winter credit bank & statement estimator
+              </h1>
+              <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
+                Simulate how winter DuctlessAire heat-pump usage and NYSEG tariff changes affect your <strong className="font-semibold">+{solarTotals.bankBalance} kWh</strong> net-metering reserve through spring.
               </p>
-
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="block font-medium mb-1">Sunrun Daily Production CSV Path</label>
-                  <input
-                    value={sunrunCsvPathInput}
-                    onChange={(e) => setSunrunCsvPathInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px]"
-                  />
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className={mutedText}>
-                      Loaded: {TELEMETRY_META.sunrun_total_rows} daily rows ({TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh)
-                    </span>
-                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 cursor-pointer font-semibold">
-                      <Upload className="w-3.5 h-3.5" /> Reload Sunrun CSV
-                      <input
-                        type="file"
-                        accept=".csv"
-                        onChange={(e) => handleCsvFileUpload(e, 'sunrun')}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800">
-                  <label className="block font-medium mb-1">NYSEG Hourly Usage CSV Path</label>
-                  <input
-                    value={nysegCsvPathInput}
-                    onChange={(e) => setNysegCsvPathInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px]"
-                  />
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className={mutedText}>
-                      Loaded: {TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly rows ({TELEMETRY_META.reconciled_days} days)
-                    </span>
-                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 cursor-pointer font-semibold">
-                      <Upload className="w-3.5 h-3.5" /> Reload NYSEG CSV
-                      <input
-                        type="file"
-                        accept=".csv"
-                        onChange={(e) => handleCsvFileUpload(e, 'nyseg')}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-800 space-y-2">
-                <div className="text-xs font-semibold">Recent Connector Ingestion Audit Logs</div>
-                {syncLogs.map((l, i) => (
-                  <div key={i} className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] font-mono">
-                    <div className="flex justify-between text-emerald-400">
-                      <span>[{l.provider}] {l.status}</span>
-                      <span className="text-slate-500">{l.ts}</span>
-                    </div>
-                    <div className="text-slate-300 mt-0.5">{l.msg}</div>
-                  </div>
-                ))}
-              </div>
             </div>
 
-            <div className={`rounded-xl border p-5 space-y-4 ${cardBg}`}>
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sm">Single-Day Telemetry Payload Tester</h3>
-                <span className="text-xs text-amber-400">Physical Bound Guard Active</span>
-              </div>
-              <p className={`text-xs ${mutedText}`}>
-                Test single-day JSON ingestion or try setting <code className="text-rose-400">m02_export_kwh</code> higher than <code className="text-amber-400">production_kwh</code> to trigger the reconciliation guard.
-              </p>
-
-              <textarea
-                rows={7}
-                value={rawPayloadInput}
-                onChange={(e) => setRawPayloadInput(e.target.value)}
-                className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs"
-              />
-
-              {ingestBanner && (
-                <div
-                  className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
-                    ingestBanner.type === 'success'
-                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-                      : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
-                  }`}
-                >
-                  {ingestBanner.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                  <span>{ingestBanner.text}</span>
-                </div>
-              )}
-
-              <button
-                onClick={handleIngestRawPayload}
-                className="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition"
-              >
-                Validate & Reconcile Record into Dashboard
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: BILLING REVISIONS & WHAT-IF FORECASTER */}
-        {activeTab === 'billing' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className={`lg:col-span-2 rounded-xl border p-5 space-y-4 ${cardBg}`}>
-              <h3 className="font-semibold text-sm">Monthly Reconciled Sunrun + NYSEG Statement Ledger (From CSVs)</h3>
-              <div className="space-y-4">
-                {NYSEG_BILL_REVISIONS.map((bill) => (
-                  <div key={bill.revision_id} className="p-4 rounded-xl border border-slate-800 bg-slate-950/50 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <span className="font-mono font-bold text-xs text-sky-400">{bill.revision_id}</span>
-                        <span className={`ml-2 text-xs ${mutedText}`}>Period: {bill.period}</span>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className={`lg:col-span-2 rounded-2xl border p-6 space-y-4 ${cardBg}`}>
+                <h3 className="font-semibold text-sm">Monthly Statement Ledger (Derived from CSVs)</h3>
+                <div className="space-y-3">
+                  {NYSEG_BILL_REVISIONS.map((bill) => (
+                    <div key={bill.revision_id} className={`p-4 rounded-xl border space-y-3 ${darkMode ? 'border-slate-800 bg-slate-950/50' : 'border-[#e6e2d8] bg-[#faf8f4]'}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-mono font-bold text-xs text-[#e07a16]">{bill.revision_id}</span>
+                          <span className={`ml-2 text-xs ${mutedText}`}>{bill.period}</span>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-[#1f7a4c]">
+                          {bill.status}
+                        </span>
                       </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                        {bill.status}
-                      </span>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                        <div><span className={`block ${mutedText}`}>Solar Produced</span><span className="font-semibold text-[#e07a16]">{bill.solar_produced_kwh} kWh</span></div>
+                        <div><span className={`block ${mutedText}`}>M01 Delivered</span><span className="font-semibold">{bill.m01_billed_kwh} kWh</span></div>
+                        <div><span className={`block ${mutedText}`}>M02 Received</span><span className="font-semibold text-[#1f7a4c]">{bill.m02_exported_kwh} kWh</span></div>
+                        <div><span className={`block ${mutedText}`}>Ending Credit Bank</span><span className="font-semibold text-[#1f7a4c]">{bill.ending_credit_bank} kWh</span></div>
+                        <div><span className={`block ${mutedText}`}>Est. Monthly Due</span><span className="font-bold text-base">${bill.total_due.toFixed(2)}</span></div>
+                      </div>
+
+                      <div className={`text-[11px] pt-2 border-t ${dividerBorder} ${mutedText}`}>
+                        {bill.audit_note}
+                      </div>
                     </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                      <div><span className={`block ${mutedText}`}>Solar Produced</span><span className="font-semibold text-amber-400">{bill.solar_produced_kwh} kWh</span></div>
-                      <div><span className={`block ${mutedText}`}>M01 Delivered</span><span className="font-semibold text-rose-400">{bill.m01_billed_kwh} kWh</span></div>
-                      <div><span className={`block ${mutedText}`}>M02 Received</span><span className="font-semibold text-emerald-400">{bill.m02_exported_kwh} kWh</span></div>
-                      <div><span className={`block ${mutedText}`}>Ending Credit Bank</span><span className="font-semibold text-sky-400">{bill.ending_credit_bank} kWh</span></div>
-                      <div><span className={`block ${mutedText}`}>Est. Monthly Due</span><span className="font-bold text-base">${bill.total_due.toFixed(2)}</span></div>
-                    </div>
-
-                    <div className={`text-[11px] pt-2 border-t border-slate-800/80 ${mutedText}`}>
-                      {bill.audit_note}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* WHAT-IF SCENARIO SIMULATOR */}
-            <div className={`rounded-xl border p-5 space-y-5 ${cardBg}`}>
-              <div>
-                <h3 className="font-semibold text-sm">Net-Metering Credit Bank Forecaster</h3>
-                <p className={`text-xs ${mutedText}`}>
-                  Starting from your real +{solarTotals.bankBalance} kWh NYSEG credit bank
-                </p>
-              </div>
-
-              <div className="space-y-4 text-xs">
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span>Winter HVAC Load Delta</span>
-                    <span className="font-bold text-amber-400">+{winterUsageGrowth}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-15"
-                    max="40"
-                    value={winterUsageGrowth}
-                    onChange={(e) => setWinterUsageGrowth(Number(e.target.value))}
-                    className="w-full accent-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span>NYSEG Delivery + Supply Escalation</span>
-                    <span className="font-bold text-sky-400">+{utilityRateEscalation}% / yr</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="15"
-                    step="0.5"
-                    value={utilityRateEscalation}
-                    onChange={(e) => setUtilityRateEscalation(Number(e.target.value))}
-                    className="w-full accent-sky-400"
-                  />
+                  ))}
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
-                <div className="text-xs text-emerald-300">Projected Spring Credit Bank Reserve</div>
-                <div className="text-2xl font-bold text-emerald-400">{projectedBank6Mo} kWh</div>
-                <div className={`text-[11px] ${mutedText}`}>
-                  Avoided utility bill value at escalated rate: $
-                  {(projectedBank6Mo * 0.2007 * (1 + utilityRateEscalation / 100)).toFixed(2)}
+              {/* WHAT-IF SCENARIO SIMULATOR */}
+              <div className={`rounded-2xl border p-6 space-y-5 h-fit ${cardBg}`}>
+                <div>
+                  <h3 className="font-semibold text-sm">Winter Drawdown Simulator</h3>
+                  <p className={`text-xs mt-0.5 ${mutedText}`}>
+                    Starting from +{solarTotals.bankBalance} kWh cumulative NYSEG reserve
+                  </p>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span>Winter HVAC Load Delta</span>
+                      <span className="font-bold text-[#e07a16]">+{winterUsageGrowth}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-15"
+                      max="40"
+                      value={winterUsageGrowth}
+                      onChange={(e) => setWinterUsageGrowth(Number(e.target.value))}
+                      className="w-full accent-[#e07a16]"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span>NYSEG Delivery + Supply Escalation</span>
+                      <span className="font-bold text-[#1f7a4c]">+{utilityRateEscalation}% / yr</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="15"
+                      step="0.5"
+                      value={utilityRateEscalation}
+                      onChange={(e) => setUtilityRateEscalation(Number(e.target.value))}
+                      className="w-full accent-[#1f7a4c]"
+                    />
+                  </div>
+                </div>
+
+                <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
+                  <div className={`text-xs ${mutedText}`}>Projected Spring Credit Bank Reserve</div>
+                  <div className="text-2xl font-bold text-[#1f7a4c]">{projectedBank6Mo} kWh</div>
+                  <div className={`text-[11px] ${mutedText}`}>
+                    Avoided utility bill value at escalated rate: $
+                    {(projectedBank6Mo * 0.2007 * (1 + utilityRateEscalation / 100)).toFixed(2)}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 5: ASSET & CIRCUIT CATALOG */}
-        {activeTab === 'assets' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {ASSET_CATALOG.map((asset) => (
-              <div key={asset.id} className={`rounded-xl border p-4 flex items-start justify-between ${cardBg}`}>
-                <div className="space-y-1">
+        {/* VIEW 6: CSV CONNECTORS & 6-STAGE PIPELINE */}
+        {activeTab === 'connectors' && (
+          <div className="space-y-6">
+            <div className="space-y-2 max-w-2xl">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                Local CSV connectors & ingestion pipeline
+              </h1>
+              <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
+                Telemetry is synced from your local Sunrun daily and NYSEG hourly CSV files, validated for physical bounds, and stripped of PII before static deployment.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className={`rounded-2xl border p-6 space-y-4 ${cardBg}`}>
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">{asset.id}</span>
-                    <span className="text-xs font-semibold text-amber-400">{asset.category}</span>
+                    <FolderOpen className="w-4 h-4 text-[#e07a16]" />
+                    <h3 className="font-semibold text-sm">Configured Local CSV Paths</h3>
                   </div>
-                  <h4 className="font-bold text-sm">{asset.name}</h4>
-                  <p className={`text-xs ${mutedText}`}>Telemetry Source: {asset.connector}</p>
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-[#1f7a4c] font-semibold">
+                    PII Sanitized
+                  </span>
                 </div>
-                <div className="text-right text-xs">
-                  <div className="font-semibold">{asset.metric}</div>
-                  <div className="text-emerald-400 mt-1">{asset.health}</div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-medium mb-1">Sunrun Daily Production CSV Path</label>
+                    <input
+                      value={sunrunCsvPathInput}
+                      onChange={(e) => setSunrunCsvPathInput(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border font-mono text-[11px] ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#dcd8ce]'}`}
+                    />
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className={mutedText}>
+                        {TELEMETRY_META.sunrun_total_rows} daily rows ({TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh)
+                      </span>
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1a1917] text-white cursor-pointer font-medium">
+                        <Upload className="w-3 h-3" /> Reload Sunrun CSV
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={(e) => handleCsvFileUpload(e, 'sunrun')}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className={`pt-3 border-t ${dividerBorder}`}>
+                    <label className="block font-medium mb-1">NYSEG Hourly Usage CSV Path</label>
+                    <input
+                      value={nysegCsvPathInput}
+                      onChange={(e) => setNysegCsvPathInput(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border font-mono text-[11px] ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#dcd8ce]'}`}
+                    />
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className={mutedText}>
+                        {TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly rows ({TELEMETRY_META.reconciled_days} days)
+                      </span>
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1f7a4c] text-white cursor-pointer font-medium">
+                        <Upload className="w-3 h-3" /> Reload NYSEG CSV
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={(e) => handleCsvFileUpload(e, 'nyseg')}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`pt-3 border-t ${dividerBorder} space-y-2`}>
+                  <div className="text-xs font-semibold">Recent Connector Ingestion Audit Logs</div>
+                  {syncLogs.map((l, i) => (
+                    <div key={i} className={`p-2.5 rounded-lg border text-[11px] font-mono ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#e6e2d8]'}`}>
+                      <div className="flex justify-between text-[#1f7a4c] font-semibold">
+                        <span>[{l.provider}] {l.status}</span>
+                        <span className={mutedText}>{l.ts}</span>
+                      </div>
+                      <div className="mt-0.5">{l.msg}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+
+              <div className={`rounded-2xl border p-6 space-y-4 ${cardBg}`}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-sm">Single-Day Telemetry Payload Tester</h3>
+                  <span className="text-xs text-[#e07a16] font-semibold">Physical Bound Guard Active</span>
+                </div>
+                <p className={`text-xs ${mutedText}`}>
+                  Test single-day JSON ingestion or try setting <code className="font-mono">m02_export_kwh</code> higher than <code className="font-mono">production_kwh</code> to trigger the reconciliation guard.
+                </p>
+
+                <textarea
+                  rows={7}
+                  value={rawPayloadInput}
+                  onChange={(e) => setRawPayloadInput(e.target.value)}
+                  className={`w-full p-3 rounded-lg border font-mono text-xs ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#dcd8ce]'}`}
+                />
+
+                {ingestBanner && (
+                  <div
+                    className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                      ingestBanner.type === 'success'
+                        ? 'bg-emerald-500/10 border border-emerald-500/30 text-[#1f7a4c]'
+                        : 'bg-rose-500/10 border border-rose-500/30 text-rose-600'
+                    }`}
+                  >
+                    {ingestBanner.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                    <span>{ingestBanner.text}</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleIngestRawPayload}
+                  className="w-full py-2.5 rounded-full bg-[#1a1917] hover:opacity-90 text-white font-semibold text-xs transition cursor-pointer"
+                >
+                  Validate & Reconcile Record
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 7: YOUR SYSTEM (ASSET & CIRCUIT CATALOG) */}
+        {activeTab === 'system' && (
+          <div className="space-y-6">
+            <div className="space-y-2 max-w-2xl">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                Your solar & utility system profile
+              </h1>
+              <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
+                Hardware, metering endpoints, and connected loads monitored across Yorktown Heights / Jefferson Valley, NY 10598.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {ASSET_CATALOG.map((asset) => (
+                <div key={asset.id} className={`rounded-2xl border p-5 flex items-start justify-between gap-4 ${cardBg}`}>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full ${calloutBg}`}>{asset.id}</span>
+                      <span className="text-xs font-semibold text-[#e07a16]">{asset.category}</span>
+                    </div>
+                    <h4 className="font-bold text-sm pt-1">{asset.name}</h4>
+                    <p className={`text-xs ${mutedText}`}>Source: {asset.connector}</p>
+                  </div>
+                  <div className="text-right text-xs shrink-0">
+                    <div className="font-semibold">{asset.metric}</div>
+                    <div className="text-[#1f7a4c] font-medium mt-1">{asset.health}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>
 
       {/* ROW CALCULATION AUDIT MODAL */}
       {selectedAuditRow && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`max-w-md w-full rounded-2xl border p-5 space-y-4 ${cardBg}`}>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`max-w-md w-full rounded-2xl border p-6 space-y-4 ${cardBg}`}>
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-sm">Record Audit & CSV Formula Breakdown</h3>
-              <button onClick={() => setSelectedAuditRow(null)}><X className="w-4 h-4" /></button>
+              <button onClick={() => setSelectedAuditRow(null)} className="cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs space-y-1.5">
-              <div>Record ID: <span className="text-amber-400">{selectedAuditRow.id}</span></div>
+            <div className={`p-4 rounded-xl border font-mono text-xs space-y-1.5 ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#e6e2d8]'}`}>
+              <div>Record ID: <span className="text-[#e07a16] font-semibold">{selectedAuditRow.id}</span></div>
               <div>Date: {selectedAuditRow.date}</div>
-              <div>Sunrun Solar Produced: <span className="text-amber-400">{selectedAuditRow.solar_kwh} kWh</span></div>
+              <div>Sunrun Solar Produced: <span className="text-[#e07a16] font-semibold">{selectedAuditRow.solar_kwh} kWh</span></div>
               <div>Sunrun EOD Meter Reading: {selectedAuditRow.eod_meter_kwh ?? 0} kWh</div>
               <div>
                 NYSEG M02 Received (Export):{' '}
-                <span className="text-emerald-400">
+                <span className="text-[#1f7a4c] font-semibold">
                   {selectedAuditRow.m02_export_kwh !== null ? `${selectedAuditRow.m02_export_kwh} kWh` : 'Pending CSV'}
                 </span>
               </div>
               <div>
                 NYSEG M01 Delivered (Import):{' '}
-                <span className="text-rose-400">
+                <span className="font-semibold">
                   {selectedAuditRow.m01_import_kwh !== null ? `${selectedAuditRow.m01_import_kwh} kWh` : 'Pending CSV'}
                 </span>
               </div>
@@ -1290,10 +1360,10 @@ export default function HeliosPulsePortal() {
               )}
               {selectedAuditRow.credit_delta !== null && (
                 <>
-                  <div className="pt-2 border-t border-slate-800 text-emerald-400">
+                  <div className={`pt-2 border-t ${dividerBorder} text-[#1f7a4c] font-semibold`}>
                     Net Credit Bank Formula: ({selectedAuditRow.m02_export_kwh} - {selectedAuditRow.m01_import_kwh}) = {selectedAuditRow.credit_delta} kWh
                   </div>
-                  <div className="text-slate-400">
+                  <div className={mutedText}>
                     Physical Check: M02 ({selectedAuditRow.m02_export_kwh}) &le; Solar ({selectedAuditRow.solar_kwh}) + 0.5 kWh [PASS]
                   </div>
                 </>
@@ -1303,53 +1373,26 @@ export default function HeliosPulsePortal() {
         </div>
       )}
 
-      {/* MOBILE SNAPSHOT PREVIEW MODAL */}
-      {showMobilePreview && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-[360px] rounded-[2.2rem] border-4 border-slate-700 bg-slate-950 text-slate-100 p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-emerald-400">GitHub Pages Read-Only Snapshot</span>
-              <button onClick={() => setShowMobilePreview(false)}><X className="w-4 h-4" /></button>
-            </div>
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700">
-              <div className="text-xs text-slate-400">NYSEG Net-Metering Credit Bank</div>
-              <div className="text-3xl font-bold text-emerald-400 mt-1">+{solarTotals.bankBalance} kWh</div>
-              <div className="text-[11px] text-slate-400 mt-2">Zero PII • Sanitized CSV Snapshot • {lastSyncTime}</div>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5 text-xs">
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                <div className="text-slate-400">Cumulative Solar</div>
-                <div className="font-bold text-amber-400 text-base">{Number(solarTotals.cumSolar).toLocaleString()} kWh</div>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                <div className="text-slate-400">Reconciled Days</div>
-                <div className="font-bold text-base">{solarTotals.reconciledCount} Days</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* GROUNDED AI RESOURCE ANALYST DRAWER */}
       {showAiDrawer && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end">
-          <div className={`w-full max-w-md h-full border-l p-5 flex flex-col justify-between ${cardBg}`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end">
+          <div className={`w-full max-w-md h-full border-l p-6 flex flex-col justify-between ${cardBg}`}>
+            <div className={`flex items-center justify-between pb-3 border-b ${dividerBorder}`}>
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <Sparkles className="w-4 h-4 text-[#e07a16]" />
                 <h3 className="font-bold text-sm">Grounded CSV Telemetry Analyst</h3>
               </div>
-              <button onClick={() => setShowAiDrawer(false)}><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowAiDrawer(false)} className="cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
 
             <div className="flex-1 overflow-y-auto py-4 space-y-3 text-xs">
               {aiMessages.map((m, idx) => (
                 <div
                   key={idx}
-                  className={`p-3 rounded-xl ${
+                  className={`p-3.5 rounded-xl ${
                     m.role === 'user'
-                      ? 'bg-indigo-600 text-white ml-8'
-                      : 'bg-slate-950 border border-slate-800 mr-6 leading-relaxed'
+                      ? 'bg-[#1a1917] text-white ml-8'
+                      : `${calloutBg} mr-6 leading-relaxed`
                   }`}
                 >
                   {m.text}
@@ -1357,13 +1400,13 @@ export default function HeliosPulsePortal() {
               ))}
             </div>
 
-            <div className="space-y-2 pt-3 border-t border-slate-800">
+            <div className={`space-y-2 pt-3 border-t ${dividerBorder}`}>
               <div className="flex flex-wrap gap-1.5">
                 {['How is my NYSEG credit bank?', 'Explain monthly CSV totals'].map((preset) => (
                   <button
                     key={preset}
                     onClick={() => handleAskAi(preset)}
-                    className="text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700"
+                    className={`text-[11px] px-3 py-1 rounded-full cursor-pointer ${calloutBg}`}
                   >
                     {preset}
                   </button>
@@ -1375,11 +1418,11 @@ export default function HeliosPulsePortal() {
                   onChange={(e) => setAiQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAskAi()}
                   placeholder="Ask about your CSV meters, bills, or credit bank..."
-                  className="flex-1 px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"
+                  className={`flex-1 px-3 py-2 rounded-full border text-xs ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#dcd8ce]'}`}
                 />
                 <button
                   onClick={() => handleAskAi()}
-                  className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                  className="px-4 py-2 rounded-full bg-[#1a1917] text-white text-xs font-semibold cursor-pointer"
                 >
                   Ask
                 </button>
