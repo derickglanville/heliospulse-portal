@@ -1,15 +1,16 @@
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
-const DEFAULT_SUNRUN_CSV =
-  'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv';
-const DEFAULT_NYSEG_CSV =
-  'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\NYSEG_Daily_Usage_Data.csv';
+const CODEX_ROOT = 'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun';
+const DEFAULT_SUNRUN_CSV = path.join(CODEX_ROOT, 'SunRun Data', 'Sunrun_Daily_Production_Data.csv');
+const DEFAULT_NYSEG_CSV = path.join(CODEX_ROOT, 'SunRun Data', 'NYSEG_Daily_Usage_Data.csv');
+const DEFAULT_APP_JSON = path.join(CODEX_ROOT, 'JSON', 'application_data_current.json');
 
 const sunrunCsvPath = process.env.SUNRUN_CSV_PATH || DEFAULT_SUNRUN_CSV;
 const nysegCsvPath = process.env.NYSEG_CSV_PATH || DEFAULT_NYSEG_CSV;
@@ -24,6 +25,39 @@ if (!fs.existsSync(sunrunCsvPath) || !fs.existsSync(nysegCsvPath)) {
   }
   console.error('[sync-csv-data] Error: Source CSV files not found and no cached telemetryData.json exists.');
   process.exit(1);
+}
+
+// Optional enrichment from application_data_current.json (weather, irradiance_peak_wm2, high/low temps, notes)
+const appEntriesByDate = new Map();
+if (fs.existsSync(DEFAULT_APP_JSON)) {
+  try {
+    const appData = JSON.parse(fs.readFileSync(DEFAULT_APP_JSON, 'utf8'));
+    for (const entry of appData.daily_entries || []) {
+      if (entry.entry_date) {
+        appEntriesByDate.set(entry.entry_date, entry);
+      }
+    }
+  } catch (err) {
+    console.warn('[sync-csv-data] Warning: Could not parse application_data_current.json:', err.message);
+  }
+}
+
+// Extract real NYSEG bill summary & 12-month credit_bank_forecast from solar_tracker.monthly_bill
+let billSummaryReport = null;
+if (fs.existsSync(path.join(CODEX_ROOT, 'solar_tracker', 'monthly_bill.py'))) {
+  try {
+    const pyOut = execFileSync(
+      'python',
+      [
+        '-c',
+        `import sys, json; sys.path.insert(0, ${JSON.stringify(CODEX_ROOT)}); from solar_tracker.monthly_bill import build_bill_summary_report; print(json.dumps(build_bill_summary_report()))`,
+      ],
+      { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }
+    );
+    billSummaryReport = JSON.parse(pyOut.trim());
+  } catch (err) {
+    console.warn('[sync-csv-data] Warning: Could not run build_bill_summary_report via python:', err.message);
+  }
 }
 
 const srLines = fs
@@ -113,6 +147,7 @@ const allDates = [...new Set([...srMap.keys(), ...nyMap.keys()])].sort();
 const dailyRows = allDates.map((date, idx) => {
   const sr = srMap.get(date) || { solar_kwh: 0, eod_meter_kwh: 0 };
   const ny = nyMap.get(date) || null;
+  const appEntry = appEntriesByDate.get(date) || null;
 
   const hasSunrun = sr.solar_kwh > 0 || sr.eod_meter_kwh > 0;
   const hasNyseg = ny !== null && ny.hours > 0;
@@ -126,24 +161,43 @@ const dailyRows = allDates.map((date, idx) => {
   const avgTemp =
     hasNyseg && ny.temps.length > 0
       ? Math.round(ny.temps.reduce((a, b) => a + b, 0) / ny.temps.length)
+      : appEntry?.temperature_f
+      ? Math.round(Number(appEntry.temperature_f))
       : null;
-  const minTemp = hasNyseg && ny.temps.length > 0 ? Math.min(...ny.temps) : null;
-  const maxTemp = hasNyseg && ny.temps.length > 0 ? Math.max(...ny.temps) : null;
+  const minTemp =
+    appEntry?.temperature_low_f != null
+      ? Math.round(Number(appEntry.temperature_low_f))
+      : hasNyseg && ny.temps.length > 0
+      ? Math.min(...ny.temps)
+      : null;
+  const maxTemp =
+    appEntry?.temperature_high_f != null
+      ? Math.round(Number(appEntry.temperature_high_f))
+      : hasNyseg && ny.temps.length > 0
+      ? Math.max(...ny.temps)
+      : null;
+
+  const irradiance_wm2 =
+    appEntry?.irradiance_peak_wm2 != null ? Math.round(Number(appEntry.irradiance_peak_wm2)) : null;
+  const weather_label = appEntry?.weather || classifyIrradiance(solar_kwh, date);
 
   let status = 'RECONCILED';
-  let note = '';
+  let note = appEntry?.notes_manual || '';
 
   if (!hasSunrun && !hasNyseg) {
     status = 'PENDING_TELEMETRY';
-    note = date === '2026-07-09' ? 'System commissioning baseline (0 kWh)' : 'Awaiting daily telemetry upload';
+    if (!note) {
+      note = date === '2026-07-09' ? 'System commissioning baseline (0 kWh)' : 'Awaiting daily telemetry upload';
+    }
   } else if (hasSunrun && !hasNyseg) {
     status = 'SUNRUN_ONLY';
-    if (date < '2026-07-31') {
-      note = 'Sunrun production logged prior to NYSEG hourly CSV export start (2026-07-31)';
-    } else {
-      note = 'Sunrun production verified; NYSEG hourly interval export pending for this date';
+    if (!note) {
+      note =
+        date < '2026-07-31'
+          ? 'Sunrun production logged prior to NYSEG hourly CSV export start (2026-07-31)'
+          : 'Sunrun production verified; NYSEG hourly interval export pending for this date';
     }
-  } else if (ny.hours !== 24) {
+  } else if (ny.hours !== 24 && !note) {
     status = 'RECONCILED';
     note =
       ny.hours === 25
@@ -162,15 +216,16 @@ const dailyRows = allDates.map((date, idx) => {
     temp_f: avgTemp,
     temp_min_f: minTemp,
     temp_max_f: maxTemp,
+    irradiance_wm2,
     nyseg_hours: hasNyseg ? ny.hours : 0,
-    irradiance: classifyIrradiance(solar_kwh, date),
+    irradiance: weather_label,
     status,
     note,
     hourly: hasNyseg ? ny.hourly.map((h) => [h.m01, h.m02]) : null,
   };
 });
 
-// Monthly aggregations
+// Monthly aggregations (stored newest-first descending: 2026-11 -> 2026-07)
 const monthlyMap = new Map();
 let cumulativeBank = 0;
 
@@ -244,11 +299,25 @@ const payload = {
     cumulative_net_credit_bank_kwh: netCreditBankKwh,
   },
   monthly_summaries: monthlySummaries,
+  credit_bank_forecast: billSummaryReport?.credit_bank_forecast || null,
+  bill_summary: billSummaryReport
+    ? {
+        file_count: billSummaryReport.file_count,
+        period_count: billSummaryReport.period_count,
+        totals: billSummaryReport.totals,
+        cost_change: billSummaryReport.cost_change,
+        credit_bank: billSummaryReport.credit_bank,
+        latest: billSummaryReport.latest,
+        next_bill_estimate: billSummaryReport.next_bill_estimate,
+        records: billSummaryReport.records,
+        authoritative_records: billSummaryReport.authoritative_records,
+      }
+    : null,
   daily_rows: [...dailyRows].reverse(),
 };
 
 fs.mkdirSync(path.dirname(outputJsonPath), { recursive: true });
 fs.writeFileSync(outputJsonPath, JSON.stringify(payload, null, 2), 'utf8');
 console.log(
-  `[sync-csv-data] Synced ${dailyRows.length} daily records (${reconciledRows.length} reconciled with NYSEG, ${nysegTotalHours} NYSEG hourly intervals) -> src/data/telemetryData.json`
+  `[sync-csv-data] Synced ${dailyRows.length} daily records (${reconciledRows.length} reconciled with NYSEG, ${nysegTotalHours} NYSEG hourly intervals, forecast=${Boolean(payload.credit_bank_forecast)}) -> src/data/telemetryData.json`
 );

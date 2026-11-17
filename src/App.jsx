@@ -5,47 +5,20 @@ import {
   Download, Eye, Layers, Smartphone, Moon, SunMedium,
   Lock, Database, Calculator, X,
   Check, Clock, Sparkles, Plug, FolderOpen, Upload,
-  ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home, ExternalLink, Minimize2
+  ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home, Minimize2
 } from 'lucide-react';
 import telemetryData from './data/telemetryData.json';
 
 const INITIAL_SOLAR_DAILY = telemetryData.daily_rows;
 const TELEMETRY_META = telemetryData.metadata;
 const MONTHLY_SUMMARIES = telemetryData.monthly_summaries;
-
-const NYSEG_BILL_REVISIONS = MONTHLY_SUMMARIES.map((m, idx) => {
-  const basicCharge = 19.11;
-  const deliveryRate = 0.1142;
-  const supplyRate = 0.0865;
-  const netBillableKwh = Math.max(0, m.m01_import_kwh - m.m02_export_kwh - m.prior_credit_bank);
-  const sbcRamSurcharge = Number((m.m01_import_kwh * 0.0095).toFixed(2));
-  const totalDue = Number((basicCharge + sbcRamSurcharge + netBillableKwh * (deliveryRate + supplyRate)).toFixed(2));
-
-  return {
-    revision_id: `CSV-${m.month}-${idx === 0 ? 'LIVE' : 'FINAL'}`,
-    month: m.month,
-    period: `${m.month} (${m.reconciled_days} NYSEG days / ${m.sunrun_days} Sunrun days)`,
-    statement_date: `${m.month}-28`,
-    status: idx === 0 ? 'IN_PROGRESS_MONTH' : 'RECONCILED_CSV',
-    basic_service_charge: basicCharge,
-    solar_produced_kwh: m.solar_kwh,
-    m01_billed_kwh: m.m01_import_kwh,
-    m02_exported_kwh: m.m02_export_kwh,
-    net_delta_kwh: m.credit_delta,
-    prior_credit_bank: m.prior_credit_bank,
-    ending_credit_bank: m.ending_credit_bank,
-    delivery_rate: deliveryRate,
-    supply_rate: supplyRate,
-    sbc_ram_surcharge: sbcRamSurcharge,
-    total_due: totalDue,
-    audit_note: `Aggregated from Sunrun_Daily_Production_Data.csv (${m.solar_kwh} kWh) & NYSEG_Daily_Usage_Data.csv (Delivered: ${m.m01_import_kwh} kWh, Received: ${m.m02_export_kwh} kWh).`,
-  };
-});
+const CREDIT_BANK_FORECAST = telemetryData.credit_bank_forecast;
+const BILL_SUMMARY = telemetryData.bill_summary;
 
 const ASSET_CATALOG = [
   {
     id: 'AST-01',
-    name: 'Sunrun Rooftop Solar Array',
+    name: 'Sunrun Rooftop Solar Array (18.45 kW DC • 41 Panels)',
     category: 'Generation',
     metric: `${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh cumulative (${(TELEMETRY_META.cumulative_solar_kwh / 129).toFixed(1)} kWh/day avg)`,
     health: `${TELEMETRY_META.sunrun_total_rows} CSV Daily Records Loaded`,
@@ -55,7 +28,7 @@ const ASSET_CATALOG = [
     id: 'AST-02',
     name: 'NYSEG Bidirectional Smart Meter (Delivered / Received)',
     category: 'Utility Grid',
-    metric: `+${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh Net Credit Bank`,
+    metric: `2,210 kWh Official Bank (+${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh CSV Net)`,
     health: `${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} Hourly Intervals (${TELEMETRY_META.reconciled_days} Days)`,
     connector: 'NYSEG_Daily_Usage_Data.csv',
   },
@@ -82,18 +55,18 @@ const SYNC_STEPS = [
   { id: 2, title: 'Aggregate NYSEG Hourly', detail: `Group ${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly Delivered/Received/Weather rows into daily totals` },
   { id: 3, title: 'Validate & Reconcile', detail: 'Enforce Received (M02) <= Solar_production + 0.5 kWh physical bound' },
   { id: 4, title: 'Anomaly & Gap Detection', detail: `Flag ${TELEMETRY_META.sunrun_only_days} Sunrun-only dates & DST 25-hr interval days` },
-  { id: 5, title: 'Recompute Credit Bank', detail: `Calculate cumulative net credit bank (+${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh)` },
+  { id: 5, title: 'Recompute Credit Bank', detail: 'Extract 2,210 kWh NYSEG statement balance & 12-month forecast' },
   { id: 6, title: 'Publish Sanitized Snapshot', detail: 'Strip PII (Name/Address/Account#) & write telemetryData.json' },
 ];
 
 const TOP_MENU_ITEMS = [
   { id: 'distribution', label: 'Energy Distribution' },
   { id: 'datagrid', label: 'Interval Data Grid' },
+  { id: 'estimator', label: 'Credit forecaster' },
+  { id: 'monthly', label: 'Production by month' },
   { id: 'savings', label: 'Solar savings' },
   { id: 'flow', label: 'Energy flow' },
-  { id: 'monthly', label: 'Production by month' },
   { id: 'nyseg', label: 'NYSEG record' },
-  { id: 'estimator', label: 'Credit forecaster' },
   { id: 'connectors', label: 'CSV connectors' },
   { id: 'system', label: 'Your system' },
 ];
@@ -104,7 +77,6 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-// Known weather overrides & solar astronomy for exact parity with the reference grid
 const NOV_GRID_OVERRIDES = {
   '2026-11-14': { cond: 'Overcast', irr: 369, sun: '+30.4°' },
   '2026-11-12': { cond: 'Drizzle', irr: 291, sun: '+30.9°' },
@@ -118,7 +90,7 @@ const NOV_GRID_OVERRIDES = {
   '2026-11-04': { cond: 'Overcast', irr: 526, sun: '+33.2°' },
 };
 
-function getSolarAstronomyForDate(dateStr, solarKwh, fallbackIrrLabel) {
+function getSolarAstronomyForDate(dateStr, solarKwh, fallbackIrrLabel, rowIrrWm2) {
   if (NOV_GRID_OVERRIDES[dateStr]) {
     return {
       sunHeight: NOV_GRID_OVERRIDES[dateStr].sun,
@@ -133,7 +105,10 @@ function getSolarAstronomyForDate(dateStr, solarKwh, fallbackIrrLabel) {
   const declination = 23.45 * Math.sin(((2 * Math.PI) / 365) * (dayOfYear - 81));
   const latitude = 41.32;
   const peakElevation = Math.max(15, 90 - latitude + declination);
-  const peakIrradiance = Math.round(Math.min(980, Math.max(180, solarKwh * 17.5 + 160)));
+  const peakIrradiance =
+    rowIrrWm2 != null
+      ? Math.round(rowIrrWm2)
+      : Math.round(Math.min(980, Math.max(180, solarKwh * 17.5 + 160)));
   return {
     sunHeight: `+${peakElevation.toFixed(1)}°`,
     irradianceWm2: `${peakIrradiance} W/m²`,
@@ -144,7 +119,7 @@ function getSolarAstronomyForDate(dateStr, solarKwh, fallbackIrrLabel) {
 
 export default function HeliosPulsePortal() {
   const [darkMode, setDarkMode] = useState(false);
-  const [activeTab, setActiveTab] = useState('datagrid');
+  const [activeTab, setActiveTab] = useState('estimator');
   const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
@@ -194,10 +169,9 @@ export default function HeliosPulsePortal() {
       const solar = r.solar_kwh || 0;
       const m01 = sourceNyseg.m01_import_kwh || 0;
       const m02 = sourceNyseg.m02_export_kwh || 0;
-      const diffNet = m01 - m02; // M01 - M02 Diff (Net)
-      const edc = solar + m01 - m02; // Home consumed (EDC)
+      const diffNet = m01 - m02;
+      const edc = solar + m01 - m02;
 
-      // Official running totals exclude the temporary Oct 29 & Oct 30 placeholders
       if (!isTempPlaceholder) {
         runM01 += m01;
         runM02 += m02;
@@ -211,9 +185,14 @@ export default function HeliosPulsePortal() {
 
       const dObj = new Date(`${r.date}T12:00:00Z`);
       const dayName = DAY_NAMES[dObj.getUTCDay()];
-      const astro = getSolarAstronomyForDate(r.date, solar, sourceNyseg.irradiance);
-      const tHigh = sourceNyseg.temp_max_f ?? sourceNyseg.temp_f ?? 55;
-      const tLow = sourceNyseg.temp_min_f ?? sourceNyseg.temp_f ?? 42;
+      const astro = getSolarAstronomyForDate(
+        r.date,
+        solar,
+        r.irradiance || sourceNyseg.irradiance,
+        r.irradiance_wm2
+      );
+      const tHigh = r.temp_max_f ?? sourceNyseg.temp_max_f ?? sourceNyseg.temp_f ?? 55;
+      const tLow = r.temp_min_f ?? sourceNyseg.temp_min_f ?? sourceNyseg.temp_f ?? 42;
 
       return {
         ...r,
@@ -239,11 +218,9 @@ export default function HeliosPulsePortal() {
       };
     });
 
-    // Return newest-first
     return computedChrono.reverse();
   }, [solarRows]);
 
-  // Period buckets for the Interval Data Grid navigator (Monthly / Weekly / Yearly)
   const gridPeriods = useMemo(() => {
     if (gridViewMode === 'Monthly') {
       const months = [...new Set(fullIntervalGridRows.map((r) => r.date.slice(0, 7)))].sort().reverse();
@@ -284,7 +261,6 @@ export default function HeliosPulsePortal() {
     return gridPeriods[safeIdx] || { key: '', label: '', rows: [] };
   }, [gridPeriods, gridCursorIndex]);
 
-  // Filter & sort rows inside the active grid period
   const visibleGridRows = useMemo(() => {
     let rows = [...activeGridPeriod.rows];
 
@@ -329,7 +305,6 @@ export default function HeliosPulsePortal() {
     gridSortAsc,
   ]);
 
-  // 7 KPI cards for the Interval Data Grid
   const gridSpanKpis = useMemo(() => {
     const rows = visibleGridRows;
     const power = rows.reduce((a, r) => a + r.solar_kwh, 0);
@@ -337,7 +312,6 @@ export default function HeliosPulsePortal() {
     const m02 = rows.reduce((a, r) => a + r.m02_export_kwh, 0);
     const edc = rows.reduce((a, r) => a + r.edc_kwh, 0);
     const netExport = m02 - m01;
-    // Customer supply/delivery base + $0.24/kWh rate matching the reference screenshot ($43.57 & $110.77 for Nov 2026)
     const dailyBaseFee = 0.948;
     const costWithSolar = Math.max(0, (m01 - m02) * 0.24 + rows.length * dailyBaseFee);
     const costWithoutSolar = edc * 0.24 + rows.length * 0.8546;
@@ -377,7 +351,6 @@ export default function HeliosPulsePortal() {
     );
   }, [reconciledRowsChrono, selectedDistDate]);
 
-  // Compute 24-hour energy balance bars for the selected date in Energy Distribution
   const hourlyBalanceData = useMemo(() => {
     if (!selectedDistRow) return [];
     const totalSolar = selectedDistRow.solar_kwh || 0;
@@ -415,13 +388,13 @@ export default function HeliosPulsePortal() {
       ts: TELEMETRY_META.generated_at.replace('T', ' ').slice(0, 19),
       provider: 'Coordinator',
       status: 'VERIFIED_COMPLETE',
-      msg: `Synced ${TELEMETRY_META.sunrun_total_rows} Sunrun days (${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh) & ${TELEMETRY_META.reconciled_days} NYSEG days (${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly rows).`,
+      msg: `Synced ${TELEMETRY_META.sunrun_total_rows} Sunrun days (${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh), ${TELEMETRY_META.reconciled_days} NYSEG days, and 12-month credit forecast.`,
     },
     {
       ts: TELEMETRY_META.generated_at.replace('T', ' ').slice(0, 19),
       provider: 'NYSEGConnector',
       status: 'SUCCESS',
-      msg: `Loaded ${TELEMETRY_META.nyseg_source_path} (Delivered: ${TELEMETRY_META.cumulative_m01_import_kwh} kWh, Received: ${TELEMETRY_META.cumulative_m02_export_kwh} kWh).`,
+      msg: `Loaded ${TELEMETRY_META.nyseg_source_path} + official 2026-11-05 statement (2,210 kWh credit bank).`,
     },
     {
       ts: TELEMETRY_META.generated_at.replace('T', ' ').slice(0, 19),
@@ -445,13 +418,9 @@ export default function HeliosPulsePortal() {
   const [aiMessages, setAiMessages] = useState([
     {
       role: 'assistant',
-      text: `Connected to your real CSV dataset (${TELEMETRY_META.date_range_start} to ${TELEMETRY_META.date_range_end}): ${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh cumulative Sunrun production and +${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh NYSEG net-metering credit bank across ${TELEMETRY_META.reconciled_days} reconciled days.`,
+      text: `Connected to your real CSV & NYSEG statement dataset: 2,210.0 kWh official NYSEG credit balance (2026-11-05 statement), -135.0 kWh unbilled net flow through 2026-11-14, and 2,075.0 kWh forecast opening balance for December 2026.`,
     },
   ]);
-
-  // What-If Scenario Sliders
-  const [winterUsageGrowth, setWinterUsageGrowth] = useState(10);
-  const [utilityRateEscalation, setUtilityRateEscalation] = useState(4.5);
 
   // Seasonal Comparison Analysis (Summer Aug 1 - Sep 15 vs Autumn Oct 1 - Nov 14)
   const seasonalComparison = useMemo(() => {
@@ -586,11 +555,6 @@ export default function HeliosPulsePortal() {
     const count = spanFilter === 'weekly' ? 7 : 14;
     return reconciled.slice(0, count).reverse();
   }, [solarRows, spanFilter]);
-
-  const projectedBank6Mo = useMemo(() => {
-    const monthlyDrawdown = 165 * (1 + winterUsageGrowth / 100);
-    return Math.max(0, Math.round(Number(solarTotals.bankBalance) - monthlyDrawdown * 4 + 420));
-  }, [solarTotals.bankBalance, winterUsageGrowth]);
 
   // Handlers
   const triggerSyncPipeline = () => {
@@ -861,9 +825,9 @@ export default function HeliosPulsePortal() {
     if (!q) return;
     let reply = '';
     if (q.toLowerCase().includes('credit') || q.toLowerCase().includes('bank')) {
-      reply = `Across all ${solarTotals.reconciledCount} reconciled NYSEG days (${TELEMETRY_META.reconciled_range_start} to ${TELEMETRY_META.latest_reconciled_date}), NYSEG Received (M02 Export) totaled ${solarTotals.cumExp} kWh and NYSEG Delivered (M01 Import) totaled ${solarTotals.cumImp} kWh, resulting in a cumulative Net-Metering Credit Bank of +${solarTotals.bankBalance} kWh.`;
+      reply = `Your official NYSEG credit-bank balance is 2,210.0 kWh on the 2026-11-05 statement. Including unbilled interval flow through 2026-11-14 (-135.0 kWh from M02: 88.8 − M01: 223.8), your forecast opening balance is 2,075.0 kWh, which stays positive through winter (lowest point: 774 kWh in February 2027) and recovers to 6,368 kWh by November 2027.`;
     } else if (q.toLowerCase().includes('bill') || q.toLowerCase().includes('nyseg') || q.toLowerCase().includes('month')) {
-      reply = `Monthly net bank additions from your CSVs: Aug 2026 (+853.60 kWh), Sep 2026 (+580.01 kWh), Oct 2026 (+227.42 kWh), and Nov 2026 MTD (-130.19 kWh seasonal drawdown).`;
+      reply = `Your latest NYSEG statement (2026-11-05 for period 2026-10-07 to 2026-11-03) recorded 437 kWh M01 import and 591 kWh M02 export (+154 kWh net export), with $43.57 in energy charges ($40.99 delivery + $0.00 supply + $2.58 taxes) and 2,210 kWh remaining in your official excess-generation credit bank.`;
     } else {
       reply = `Your Sunrun array has produced ${solarTotals.cumSolar} kWh cumulatively across ${solarTotals.totalDays} CSV days (End-of-Day Meter Reading: ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}).`;
     }
@@ -897,7 +861,6 @@ export default function HeliosPulsePortal() {
     setSelectedDistDate(reconciledRowsChrono[nextIdx].date);
   };
 
-  // Computed metrics for the selected day in the Energy Distribution tab
   const distDayMetrics = useMemo(() => {
     const r = selectedDistRow || {
       date: '2026-11-14',
@@ -918,7 +881,7 @@ export default function HeliosPulsePortal() {
     const solarCovPct = 100 - gridDepPct;
     const netGridFlow = m01 - m02;
     const co2AvoidedLb = (solar * 0.857).toFixed(1);
-    const astro = getSolarAstronomyForDate(r.date, solar, r.irradiance);
+    const astro = getSolarAstronomyForDate(r.date, solar, r.irradiance, r.irradiance_wm2);
 
     return {
       date: r.date,
@@ -932,7 +895,7 @@ export default function HeliosPulsePortal() {
       netGridFlowAbs: Math.abs(netGridFlow).toFixed(1),
       netGridImported: netGridFlow >= 0,
       co2AvoidedLb,
-      irradianceLabel: r.irradiance || 'Overcast',
+      irradianceLabel: astro.weatherCond || 'Overcast',
       tempMax: r.temp_max_f ?? r.temp_f ?? 43,
       tempMin: r.temp_min_f ?? r.temp_f ?? 35,
       irradianceWm2: astro.irradianceWm2,
@@ -952,10 +915,77 @@ export default function HeliosPulsePortal() {
   const trackBg = darkMode ? 'bg-slate-800' : 'bg-[#edeae2]';
   const dividerBorder = darkMode ? 'border-slate-800' : 'border-[#ece8df]';
 
-  // Reusable renderer for the Interval Data Grid (used both inline and in Pop Out modal)
+  // Helper renderer for forecast rows in the Credit Forecaster tab
+  const renderForecastRow = (row, prevBalance) => {
+    const netUsage = row.net_usage_kwh || 0;
+    const isImported = netUsage > 0;
+    const bankChange = (row.ending_credit_kwh || 0) - prevBalance;
+    const taxAndFees = (row.projected_taxes || 0) + (row.projected_recurring_fees || 0);
+
+    return (
+      <tr key={row.month} className="border-b border-slate-200/80 last:border-b-0">
+        <td className="py-4 px-4 font-bold text-slate-900 dark:text-slate-100 align-middle text-sm">
+          {row.month}
+        </td>
+
+        {/* Estimated net grid usage */}
+        <td className="py-3.5 px-4 text-right align-middle space-y-0.5">
+          <div className={`font-bold text-sm ${isImported ? 'text-[#dc2626]' : 'text-[#15803d]'}`}>
+            {Math.round(Math.abs(netUsage)).toLocaleString()} kWh {isImported ? 'imported' : 'exported'}
+          </div>
+          <div className="text-xs text-slate-500">
+            Solar: {Math.round(row.solar_production_kwh || 0).toLocaleString()} · Home:{' '}
+            {Math.round(row.household_consumption_kwh || 0).toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-500">
+            Normal: {Math.round(row.normal_load_kwh || 0).toLocaleString()} · Cool:{' '}
+            {Math.round(row.cooling_load_kwh || 0).toLocaleString()} · Heat:{' '}
+            {Math.round(row.heating_load_kwh || 0).toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-500">
+            M01: {Math.round(row.predicted_m01_kwh || 0).toLocaleString()} · M02:{' '}
+            {Math.round(row.predicted_m02_kwh || 0).toLocaleString()}
+          </div>
+        </td>
+
+        {/* Estimated energy charge */}
+        <td className="py-3.5 px-4 text-right align-middle space-y-0.5">
+          <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
+            ${Number(row.estimated_charges || 0).toFixed(2)}
+          </div>
+          <div className="text-xs text-slate-500">
+            Credit bank: {Math.round(row.ending_credit_kwh || 0).toLocaleString()} kWh
+          </div>
+          <div
+            className={`text-xs font-semibold ${
+              bankChange > 0 ? 'text-[#15803d]' : bankChange < 0 ? 'text-[#dc2626]' : 'text-slate-500'
+            }`}
+          >
+            {bankChange > 0 ? 'Increased' : bankChange < 0 ? 'Decreased' : 'No change'}:{' '}
+            {Math.round(Math.abs(bankChange)).toLocaleString()} kWh
+          </div>
+        </td>
+
+        {/* Estimated NYSEG amount due */}
+        <td className="py-3.5 px-4 text-right align-middle space-y-0.5">
+          <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
+            ${Number(row.estimated_amount_due ?? row.estimated_charges ?? 0).toFixed(2)}
+          </div>
+          <div className="text-xs text-slate-500">
+            Minimum NYSEG charges: ${Number(row.minimum_monthly_amount_due || 43.57).toFixed(2)}
+          </div>
+          <div className="text-xs text-slate-500">
+            Usage charges: Supply ${Number(row.projected_supply_charges || 0).toFixed(2)} · Delivery $
+            {Number(row.projected_delivery_charges || 0).toFixed(2)} · Tax/fees ${taxAndFees.toFixed(2)}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  // Reusable renderer for the Interval Data Grid
   const renderIntervalDataGrid = (isPopOutModal = false) => (
     <div className="space-y-4">
-      {/* TOP BAR: ROW COUNT, VIEW SELECTOR, PERIOD PAGER, DOWNLOAD CSV, POP OUT */}
       <div className="flex flex-wrap items-center justify-end gap-2.5 text-xs">
         <span className="font-bold text-[#0f5132] dark:text-emerald-400">
           {visibleGridRows.length} of {fullIntervalGridRows.length} rows
@@ -1020,17 +1050,14 @@ export default function HeliosPulsePortal() {
         </button>
       </div>
 
-      {/* PURPLE TEMPORARY NYSEG RECORDS NOTICE BANNER */}
       <div className="p-3.5 rounded-xl bg-[#f5eeff] border border-[#d8b4fe] text-[#6b21a8] text-xs leading-relaxed">
         <strong className="font-bold">Temporary NYSEG records:</strong> October 29 and 30 are display-only copies of October 31 while NYSEG has no hourly intervals for those dates. They are excluded from official reconciliation, credit-bank, and forecast calculations; visible grid-span totals include the purple placeholders.
       </div>
 
-      {/* EXPLANATORY SUBTEXT */}
       <p className="text-xs sm:text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
         Each row totals the day&apos;s intervals. Temperature is the daily average. Select a weekly, monthly, or yearly span to navigate the same grid; sorting, notes, selection, CSV export, and Pop Out remain available. Dollar amounts use the configured $0.24/kWh rate.
       </p>
 
-      {/* 7 SUMMARY KPI CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <div className="p-3.5 rounded-xl border border-slate-200 bg-[#f8fbfd]">
           <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">POWER</div>
@@ -1073,7 +1100,6 @@ export default function HeliosPulsePortal() {
         </div>
       </div>
 
-      {/* COLOR-CODED 18-COLUMN DATA GRID */}
       <div className="rounded-xl border border-slate-300 overflow-hidden bg-white shadow-xs">
         <div className={`overflow-x-auto ${isPopOutModal ? 'max-h-[72vh]' : 'max-h-[600px]'}`}>
           <table className="w-full border-collapse text-xs">
@@ -1101,7 +1127,6 @@ export default function HeliosPulsePortal() {
                   Sun<br />height<br />(°)
                 </th>
 
-                {/* FRAMED COLUMN 1: SUNRUN POWER */}
                 <th className="p-2 text-right font-bold bg-[#f5e6c8] text-[#78350f] border-t-4 border-x-3 border-[#b45309] whitespace-nowrap">
                   <div className="flex justify-end mb-1">
                     <select
@@ -1119,7 +1144,6 @@ export default function HeliosPulsePortal() {
                   </div>
                 </th>
 
-                {/* FRAMED COLUMN 2: DELIVERED / M01 */}
                 <th className="p-2 text-right font-bold bg-[#dbeafe] text-[#1e3a8a] border-t-4 border-x-3 border-[#1d4ed8] whitespace-nowrap">
                   <div className="flex justify-end mb-1">
                     <select
@@ -1144,7 +1168,6 @@ export default function HeliosPulsePortal() {
                   Running<br />M01
                 </th>
 
-                {/* FRAMED COLUMN 3: RECEIVED / M02 */}
                 <th className="p-2 text-right font-bold bg-[#ccf0e6] text-[#115e59] border-t-4 border-x-3 border-[#0f766e] whitespace-nowrap">
                   <div className="flex justify-end mb-1">
                     <select
@@ -1169,7 +1192,6 @@ export default function HeliosPulsePortal() {
                   Running<br />M02
                 </th>
 
-                {/* M01 - M02 DIFF (NET) */}
                 <th className="p-2 text-right font-bold bg-[#e6f2f7] border-r border-slate-300 whitespace-nowrap">
                   <div className="flex justify-end mb-1">
                     <select
@@ -1187,7 +1209,6 @@ export default function HeliosPulsePortal() {
                   </div>
                 </th>
 
-                {/* FRAMED COLUMN 4: EDC */}
                 <th className="p-2 text-right font-bold bg-[#e5defc] text-[#4c1d95] border-t-4 border-x-3 border-[#6d28d9] whitespace-nowrap">
                   <div className="flex justify-end mb-1">
                     <select
@@ -1264,12 +1285,10 @@ export default function HeliosPulsePortal() {
                       {row.sunHeight}
                     </td>
 
-                    {/* SUNRUN POWER */}
                     <td className="p-2.5 text-right font-bold text-[#92400e] bg-[#fde68a]/65 border-x-3 border-[#b45309]">
                       {row.solar_kwh.toFixed(1)}
                     </td>
 
-                    {/* DELIVERED / M01 */}
                     <td
                       className={`p-2.5 text-right font-bold border-x-3 border-[#1d4ed8] ${
                         row.isTempPlaceholder
@@ -1280,12 +1299,10 @@ export default function HeliosPulsePortal() {
                       {row.m01_import_kwh.toFixed(1)}
                     </td>
 
-                    {/* RUNNING M01 */}
                     <td className="p-2.5 text-right font-extrabold bg-[#d1fae5]/75 text-[#15803d] border-r border-slate-300/80">
                       {row.running_m01.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                     </td>
 
-                    {/* RECEIVED / M02 */}
                     <td
                       className={`p-2.5 text-right font-bold border-x-3 border-[#0f766e] ${
                         row.isTempPlaceholder
@@ -1296,12 +1313,10 @@ export default function HeliosPulsePortal() {
                       {row.m02_export_kwh.toFixed(1)}
                     </td>
 
-                    {/* RUNNING M02 */}
                     <td className="p-2.5 text-right font-extrabold bg-[#d1fae5]/75 text-[#15803d] border-r border-slate-300/80">
                       {row.running_m02.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                     </td>
 
-                    {/* M01 - M02 DIFF (NET) */}
                     <td
                       className={`p-2.5 text-right font-bold bg-[#fef08a]/80 border-r border-slate-300/80 ${
                         row.m01_m02_diff >= 0 ? 'text-[#15803d]' : 'text-[#dc2626]'
@@ -1310,27 +1325,22 @@ export default function HeliosPulsePortal() {
                       {row.m01_m02_diff >= 0 ? `+${row.m01_m02_diff.toFixed(1)}` : row.m01_m02_diff.toFixed(1)}
                     </td>
 
-                    {/* EDC */}
                     <td className="p-2.5 text-right font-bold bg-[#ede9fe]/90 text-[#5b21b6] border-x-3 border-[#6d28d9]">
                       {row.edc_kwh.toFixed(1)}
                     </td>
 
-                    {/* RUNNING EDC */}
                     <td className="p-2.5 text-right font-extrabold bg-[#d1fae5]/75 text-[#15803d] border-r-2 border-indigo-900">
                       {row.running_edc.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                     </td>
 
-                    {/* IMPORT COST */}
                     <td className="p-2.5 text-right font-semibold text-[#ef4444] border-r border-slate-300/80">
                       ${row.import_cost.toFixed(2)}
                     </td>
 
-                    {/* EXPORT VALUE */}
                     <td className="p-2.5 text-right font-semibold text-[#16a34a] border-r border-slate-300/80">
                       ${row.export_value.toFixed(2)}
                     </td>
 
-                    {/* NET COST */}
                     <td
                       className={`p-2.5 text-right font-semibold border-r border-slate-300/80 ${
                         row.net_cost >= 0 ? 'text-[#ef4444]' : 'text-[#0d9488]'
@@ -1339,17 +1349,15 @@ export default function HeliosPulsePortal() {
                       {row.net_cost >= 0 ? `+${row.net_cost.toFixed(2)}` : row.net_cost.toFixed(2)}
                     </td>
 
-                    {/* RUNNING NET COST */}
                     <td className="p-2.5 text-right font-extrabold bg-[#dcfce7]/80 text-[#15803d] border-r border-slate-300/80 whitespace-nowrap">
                       ${row.running_net_cost.toFixed(2)}
                     </td>
 
-                    {/* NOTES */}
                     <td className="p-1.5 bg-[#f8fafc]">
                       <input
                         type="text"
                         placeholder="Add note"
-                        value={gridNotes[row.date] ?? ''}
+                        value={gridNotes[row.date] ?? row.note ?? ''}
                         onChange={(e) =>
                           setGridNotes((prev) => ({ ...prev, [row.date]: e.target.value }))
                         }
@@ -1366,12 +1374,14 @@ export default function HeliosPulsePortal() {
     </div>
   );
 
+  const forecastRows = CREDIT_BANK_FORECAST?.rows || [];
+  const forecastOpeningBalance = CREDIT_BANK_FORECAST?.opening_projected_kwh ?? 2075.043;
+
   return (
     <div className={`min-h-screen transition-colors duration-200 font-sans ${pageBg}`}>
       {/* TOP MENU BAR WITH PILL BUTTONS */}
       <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3.5 pb-3 flex flex-wrap items-center justify-between gap-3">
-          {/* PILL NAVIGATION MENU BUTTONS */}
           <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {TOP_MENU_ITEMS.map((item) => {
               const active = activeTab === item.id;
@@ -1395,7 +1405,6 @@ export default function HeliosPulsePortal() {
             })}
           </nav>
 
-          {/* COMPACT UTILITY ACTIONS ON FAR RIGHT */}
           <div className="flex items-center gap-1.5">
             <button
               onClick={triggerSyncPipeline}
@@ -1439,17 +1448,17 @@ export default function HeliosPulsePortal() {
 
       {/* MAIN CONTENT CONTAINER */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8">
-        {/* NEW TAB: INTERVAL DATA GRID (EXACT REPLICA OF UPLOADED DATA GRID SCREENSHOT) */}
+        {/* TAB: INTERVAL DATA GRID */}
         {activeTab === 'datagrid' && (
           <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs">
             {renderIntervalDataGrid(false)}
           </div>
         )}
 
-        {/* TAB: ENERGY DISTRIBUTION (3-COLUMN VIEW) */}
+        {/* TAB: ENERGY DISTRIBUTION */}
         {activeTab === 'distribution' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
-            {/* COLUMN 1: DAILY ENERGY FLOW — WHERE ENERGY MOVED */}
+            {/* COLUMN 1: DAILY ENERGY FLOW */}
             <div className={`rounded-2xl border overflow-hidden flex flex-col justify-between ${
               darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#f4fbf7] border-[#d8ece2] shadow-xs'
             }`}>
@@ -1502,7 +1511,6 @@ export default function HeliosPulsePortal() {
                   </div>
                 </div>
 
-                {/* Circular Flow Diagram */}
                 <div className="relative h-[300px] w-full mt-2 select-none">
                   <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 340 300">
                     <defs>
@@ -1537,7 +1545,6 @@ export default function HeliosPulsePortal() {
                     />
                   </svg>
 
-                  {/* Top-Left Node: M01 Imported */}
                   <div
                     className={`absolute left-4 top-2 w-24 h-24 rounded-full border-2 border-[#22c55e] flex flex-col items-center justify-center text-center shadow-xs ${
                       darkMode ? 'bg-emerald-950/60 text-emerald-100' : 'bg-[#dcfce7] text-[#14532d]'
@@ -1553,7 +1560,6 @@ export default function HeliosPulsePortal() {
                     </div>
                   </div>
 
-                  {/* Top-Right Node: Produced SunRun Solar */}
                   <div
                     className={`absolute right-4 top-2 w-24 h-24 rounded-full border-2 border-[#0ea5e9] flex flex-col items-center justify-center text-center shadow-xs ${
                       darkMode ? 'bg-sky-950/60 text-sky-100' : 'bg-white text-[#0f172a]'
@@ -1569,7 +1575,6 @@ export default function HeliosPulsePortal() {
                     </div>
                   </div>
 
-                  {/* Center Node: Estimated Home Consumed */}
                   <div
                     className={`absolute left-1/2 -translate-x-1/2 top-[102px] w-26 h-26 rounded-full border-2 border-[#f97316] flex flex-col items-center justify-center text-center shadow-xs ${
                       darkMode ? 'bg-slate-950 text-amber-100' : 'bg-white text-[#1e293b]'
@@ -1585,7 +1590,6 @@ export default function HeliosPulsePortal() {
                     </div>
                   </div>
 
-                  {/* Bottom Node: M02 Exported */}
                   <div
                     className={`absolute left-1/2 -translate-x-1/2 bottom-0 w-22 h-22 rounded-full border-2 border-[#ef4444] flex flex-col items-center justify-center text-center shadow-xs ${
                       darkMode ? 'bg-rose-950/60 text-rose-100' : 'bg-[#ffe4e6] text-[#881337]'
@@ -1603,7 +1607,6 @@ export default function HeliosPulsePortal() {
                 </div>
               </div>
 
-              {/* Bottom Performance Sub-Panel */}
               <div className={`p-5 border-t space-y-3 ${
                 darkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-[#f6f5fb] border-[#e5e4f0]'
               }`}>
@@ -1686,7 +1689,6 @@ export default function HeliosPulsePortal() {
                   </div>
                 </div>
 
-                {/* Weather / Irradiance / Sun Height Strip */}
                 <div className={`grid grid-cols-3 gap-2 py-3 border-y ${dividerBorder}`}>
                   <div className={`pr-2 border-r ${dividerBorder}`}>
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">WEATHER</div>
@@ -1709,7 +1711,6 @@ export default function HeliosPulsePortal() {
                   </div>
                 </div>
 
-                {/* Note + Day Dropdown */}
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <p className="text-[11px] text-slate-500 leading-relaxed">
                     NYSEG M01/M02 bars are measured. SunRun production and home use are apportioned from daily totals for this visual.
@@ -1732,7 +1733,6 @@ export default function HeliosPulsePortal() {
                   </div>
                 </div>
 
-                {/* Legend */}
                 <div className="space-y-1.5 text-xs pl-6 pt-1">
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-xs bg-[#06b6d4] inline-block" />
@@ -1753,7 +1753,6 @@ export default function HeliosPulsePortal() {
                 </div>
               </div>
 
-              {/* Diverging 24-Hour Bar Chart */}
               <div className="pt-4 pb-2">
                 <div className="relative h-56 flex">
                   <div className="w-6 flex flex-col justify-between text-[11px] text-slate-500 text-right pr-1.5 py-1">
@@ -2141,7 +2140,7 @@ export default function HeliosPulsePortal() {
           </div>
         )}
 
-        {/* VIEW 3: PRODUCTION BY MONTH */}
+        {/* VIEW 3: PRODUCTION BY MONTH (DESCENDING ORDER: 2026-11 -> 2026-07) */}
         {activeTab === 'monthly' && (
           <div className="space-y-6 max-w-5xl mx-auto">
             <div className="space-y-2 max-w-2xl">
@@ -2149,58 +2148,60 @@ export default function HeliosPulsePortal() {
                 Production & grid exchange by month
               </h1>
               <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
-                Monthly totals aggregated directly from <code className="font-mono text-xs">Sunrun_Daily_Production_Data.csv</code> and <code className="font-mono text-xs">NYSEG_Daily_Usage_Data.csv</code> across July – November 2026.
+                Monthly totals sorted newest-first (descending) from <code className="font-mono text-xs">Sunrun_Daily_Production_Data.csv</code> and <code className="font-mono text-xs">NYSEG_Daily_Usage_Data.csv</code> (November 2026 → July 2026).
               </p>
             </div>
 
             <div className={`rounded-2xl border p-6 sm:p-7 space-y-6 ${cardBg}`}>
               <div className={`text-xs sm:text-[13px] ${mutedText}`}>
-                Monthly kWh comparison • <strong className="text-[#e07a16]">Orange</strong> = Sunrun Solar Produced • <strong className="text-[#1f7a4c]">Green</strong> = NYSEG Received (M02 Export) • <strong className="text-[#687076]">Slate</strong> = NYSEG Delivered (M01 Import)
+                Monthly kWh comparison (Descending) • <strong className="text-[#e07a16]">Orange</strong> = Sunrun Solar Produced • <strong className="text-[#1f7a4c]">Green</strong> = NYSEG Received (M02 Export) • <strong className="text-[#687076]">Slate</strong> = NYSEG Delivered (M01 Import)
               </div>
 
               <div className={`divide-y ${dividerBorder}`}>
-                {[...MONTHLY_SUMMARIES].reverse().map((m, idx) => {
-                  const maxMonthVal = 2000;
-                  const solarW = Math.min(100, Math.max(2, (m.solar_kwh / maxMonthVal) * 100));
-                  const recW = Math.min(100, Math.max(2, (m.m02_export_kwh / maxMonthVal) * 100));
-                  const delW = Math.min(100, Math.max(2, (m.m01_import_kwh / maxMonthVal) * 100));
-                  return (
-                    <div key={m.month} className={`${idx === 0 ? 'pb-5' : 'py-5'} space-y-2.5`}>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm">
-                          {m.month} <span className={`font-normal text-xs ${mutedText}`}>({m.sunrun_days} Sunrun days / {m.reconciled_days} NYSEG days)</span>
-                        </span>
-                        <span className={`text-xs sm:text-sm font-bold ${m.credit_delta >= 0 ? 'text-[#1f7a4c]' : 'text-amber-600'}`}>
-                          Net Bank: {m.credit_delta >= 0 ? `+${m.credit_delta}` : m.credit_delta} kWh (End Bank: {m.ending_credit_bank} kWh)
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
-                        <span className={`text-right ${mutedText}`}>Solar Produced</span>
-                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
-                          <div style={{ width: `${solarW}%` }} className="h-full rounded-full bg-[#e07a16]" />
+                {[...MONTHLY_SUMMARIES]
+                  .sort((a, b) => b.month.localeCompare(a.month))
+                  .map((m, idx) => {
+                    const maxMonthVal = 2000;
+                    const solarW = Math.min(100, Math.max(2, (m.solar_kwh / maxMonthVal) * 100));
+                    const recW = Math.min(100, Math.max(2, (m.m02_export_kwh / maxMonthVal) * 100));
+                    const delW = Math.min(100, Math.max(2, (m.m01_import_kwh / maxMonthVal) * 100));
+                    return (
+                      <div key={m.month} className={`${idx === 0 ? 'pb-5' : 'py-5'} space-y-2.5`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-sm">
+                            {m.month} <span className={`font-normal text-xs ${mutedText}`}>({m.sunrun_days} Sunrun days / {m.reconciled_days} NYSEG days)</span>
+                          </span>
+                          <span className={`text-xs sm:text-sm font-bold ${m.credit_delta >= 0 ? 'text-[#1f7a4c]' : 'text-amber-600'}`}>
+                            Net Bank: {m.credit_delta >= 0 ? `+${m.credit_delta}` : m.credit_delta} kWh (End Bank: {m.ending_credit_bank} kWh)
+                          </span>
                         </div>
-                        <span className="font-mono font-medium text-right">{m.solar_kwh.toFixed(1)} kWh</span>
-                      </div>
 
-                      <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
-                        <span className={`text-right ${mutedText}`}>NYSEG Received</span>
-                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
-                          <div style={{ width: `${recW}%` }} className="h-full rounded-full bg-[#1f7a4c]" />
+                        <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
+                          <span className={`text-right ${mutedText}`}>Solar Produced</span>
+                          <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                            <div style={{ width: `${solarW}%` }} className="h-full rounded-full bg-[#e07a16]" />
+                          </div>
+                          <span className="font-mono font-medium text-right">{m.solar_kwh.toFixed(1)} kWh</span>
                         </div>
-                        <span className="font-mono font-medium text-right">{m.m02_export_kwh.toFixed(1)} kWh</span>
-                      </div>
 
-                      <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
-                        <span className={`text-right ${mutedText}`}>NYSEG Delivered</span>
-                        <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
-                          <div style={{ width: `${delW}%` }} className="h-full rounded-full bg-[#687076]" />
+                        <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
+                          <span className={`text-right ${mutedText}`}>NYSEG Received</span>
+                          <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                            <div style={{ width: `${recW}%` }} className="h-full rounded-full bg-[#1f7a4c]" />
+                          </div>
+                          <span className="font-mono font-medium text-right">{m.m02_export_kwh.toFixed(1)} kWh</span>
                         </div>
-                        <span className="font-mono font-medium text-right">{m.m01_import_kwh.toFixed(1)} kWh</span>
+
+                        <div className="grid grid-cols-[95px_1fr_95px] items-center gap-3 text-xs">
+                          <span className={`text-right ${mutedText}`}>NYSEG Delivered</span>
+                          <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
+                            <div style={{ width: `${delW}%` }} className="h-full rounded-full bg-[#687076]" />
+                          </div>
+                          <span className="font-mono font-medium text-right">{m.m01_import_kwh.toFixed(1)} kWh</span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </div>
           </div>
@@ -2384,100 +2385,169 @@ export default function HeliosPulsePortal() {
           </div>
         )}
 
-        {/* VIEW 5: CREDIT FORECASTER */}
-        {activeTab === 'estimator' && (
-          <div className="space-y-6 max-w-5xl mx-auto">
-            <div className="space-y-2 max-w-2xl">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                Winter credit bank & statement estimator
-              </h1>
-              <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
-                Simulate how winter DuctlessAire heat-pump usage and NYSEG tariff changes affect your <strong className="font-semibold">+{solarTotals.bankBalance} kWh</strong> net-metering reserve through spring.
-              </p>
+        {/* VIEW 5: CREDIT FORECASTER (EXACT REPLICA OF REAL NYSEG STATEMENT + 12-MONTH FORECAST) */}
+        {activeTab === 'estimator' && CREDIT_BANK_FORECAST && (
+          <div className="space-y-5 max-w-6xl mx-auto">
+            {/* MAIN FORECAST PLAN CARD */}
+            <div className="rounded-2xl border border-emerald-200/90 bg-white dark:bg-slate-900 dark:border-slate-800 p-6 shadow-xs space-y-3.5">
+              {/* Top Heading Row */}
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-lg font-extrabold text-[#0f5132] dark:text-emerald-400">
+                  Starting official balance: {Math.round(CREDIT_BANK_FORECAST.official_credit_kwh).toLocaleString()} kWh
+                </h2>
+                <span className="text-xs font-semibold text-slate-500">
+                  Estimated change since statement:{' '}
+                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh >= 0 ? '+' : ''}
+                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh.toFixed(1)} kWh
+                </span>
+              </div>
+
+              {/* 3 Explanatory Paragraphs */}
+              <div className="space-y-2 text-xs sm:text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                <p>
+                  Credit-bank reconciliation: the official{' '}
+                  {Math.round(CREDIT_BANK_FORECAST.reconciliation?.official_balance_kwh ?? CREDIT_BANK_FORECAST.official_credit_kwh).toLocaleString()}{' '}
+                  kWh balance is from the{' '}
+                  {CREDIT_BANK_FORECAST.reconciliation?.official_balance_date ?? CREDIT_BANK_FORECAST.official_statement_date}{' '}
+                  NYSEG statement. Actual interval flow is included through{' '}
+                  {CREDIT_BANK_FORECAST.reconciliation?.actual_interval_through ?? CREDIT_BANK_FORECAST.interval_file_end};
+                  the monthly forecast begins{' '}
+                  {CREDIT_BANK_FORECAST.reconciliation?.forecast_start ?? '2026-12-01'}.
+                </p>
+                <p>
+                  {CREDIT_BANK_FORECAST.reconciliation?.annual_settlement_status ??
+                    'No NYSEG annual settlement, expiration, or conversion rule is configured. The forecast preserves kWh credits until an official statement or confirmed tariff rule changes them.'}
+                </p>
+                <p>
+                  Each monthly balance applies the expected net grid usage to the credit bank. A positive value is electricity imported; a negative value is exported.
+                </p>
+              </div>
+
+              {/* First 6 Months Forecast Table (December 2026 – May 2027) */}
+              <div className="overflow-x-auto pt-1">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#e6f4ea] dark:bg-emerald-950/50 text-[#0f5132] dark:text-emerald-300 text-xs font-bold border-b border-emerald-200 dark:border-slate-700">
+                      <th className="py-2.5 px-4">Month</th>
+                      <th className="py-2.5 px-4 text-right">Estimated net grid usage</th>
+                      <th className="py-2.5 px-4 text-right">Estimated energy charge</th>
+                      <th className="py-2.5 px-4 text-right">Estimated NYSEG amount due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecastRows.slice(0, 6).map((row, idx) => {
+                      const prevBal =
+                        idx === 0
+                          ? forecastOpeningBalance
+                          : forecastRows[idx - 1].ending_credit_kwh;
+                      return renderForecastRow(row, prevBal);
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Expandable Next 6 Months (June 2027 – November 2027) */}
+              {forecastRows.length > 6 && (
+                <details className="pt-2 group">
+                  <summary className="text-xs font-bold text-[#0f5132] dark:text-emerald-400 cursor-pointer select-none hover:underline">
+                    Show the next six months
+                  </summary>
+                  <div className="overflow-x-auto pt-3">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#e6f4ea] dark:bg-emerald-950/50 text-[#0f5132] dark:text-emerald-300 text-xs font-bold border-b border-emerald-200 dark:border-slate-700">
+                          <th className="py-2.5 px-4">Month</th>
+                          <th className="py-2.5 px-4 text-right">Estimated net grid usage</th>
+                          <th className="py-2.5 px-4 text-right">Estimated energy charge</th>
+                          <th className="py-2.5 px-4 text-right">Estimated NYSEG amount due</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {forecastRows.slice(6, 12).map((row, idx) => {
+                          const rowIndex = idx + 6;
+                          const prevBal = forecastRows[rowIndex - 1].ending_credit_kwh;
+                          return renderForecastRow(row, prevBal);
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className={`lg:col-span-2 rounded-2xl border p-6 space-y-4 ${cardBg}`}>
-                <h3 className="font-semibold text-sm">Monthly Statement Ledger (Derived from CSVs)</h3>
-                <div className="space-y-3">
-                  {NYSEG_BILL_REVISIONS.map((bill) => (
-                    <div key={bill.revision_id} className={`p-4 rounded-xl border space-y-3 ${darkMode ? 'border-slate-800 bg-slate-950/50' : 'border-[#e6e2d8] bg-[#faf8f4]'}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <span className="font-mono font-bold text-xs text-[#e07a16]">{bill.revision_id}</span>
-                          <span className={`ml-2 text-xs ${mutedText}`}>{bill.period}</span>
-                        </div>
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-[#1f7a4c]">
-                          {bill.status}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                        <div><span className={`block ${mutedText}`}>Solar Produced</span><span className="font-semibold text-[#e07a16]">{bill.solar_produced_kwh} kWh</span></div>
-                        <div><span className={`block ${mutedText}`}>M01 Delivered</span><span className="font-semibold">{bill.m01_billed_kwh} kWh</span></div>
-                        <div><span className={`block ${mutedText}`}>M02 Received</span><span className="font-semibold text-[#1f7a4c]">{bill.m02_exported_kwh} kWh</span></div>
-                        <div><span className={`block ${mutedText}`}>Ending Credit Bank</span><span className="font-semibold text-[#1f7a4c]">{bill.ending_credit_bank} kWh</span></div>
-                        <div><span className={`block ${mutedText}`}>Est. Monthly Due</span><span className="font-bold text-base">${bill.total_due.toFixed(2)}</span></div>
-                      </div>
-
-                      <div className={`text-[11px] pt-2 border-t ${dividerBorder} ${mutedText}`}>
-                        {bill.audit_note}
-                      </div>
-                    </div>
-                  ))}
+            {/* 4 BOTTOM SUMMARY METRIC CARDS (EXACT MATCH TO SCREENSHOT) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-xl border border-slate-200 bg-[#f9fbfd] dark:bg-slate-900 dark:border-slate-800 space-y-1">
+                <div className="text-xs font-semibold text-slate-500">Official NYSEG credit balance</div>
+                <div className="text-2xl font-extrabold text-[#0f5132] dark:text-emerald-400">
+                  {CREDIT_BANK_FORECAST.official_credit_kwh.toLocaleString('en-US', {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })}{' '}
+                  kWh
+                </div>
+                <div className="text-xs text-slate-500">
+                  Statement {CREDIT_BANK_FORECAST.official_statement_date}
                 </div>
               </div>
 
-              <div className={`rounded-2xl border p-6 space-y-5 h-fit ${cardBg}`}>
-                <div>
-                  <h3 className="font-semibold text-sm">Winter Drawdown Simulator</h3>
-                  <p className={`text-xs mt-0.5 ${mutedText}`}>
-                    Starting from +{solarTotals.bankBalance} kWh cumulative NYSEG reserve
-                  </p>
+              <div className="p-4 rounded-xl border border-slate-200 bg-[#f9fbfd] dark:bg-slate-900 dark:border-slate-800 space-y-1">
+                <div className="text-xs font-semibold text-slate-500">Estimated credits since statement</div>
+                <div className="text-2xl font-extrabold text-[#0f5132] dark:text-emerald-400">
+                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh >= 0 ? '+' : ''}
+                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh.toFixed(1)} kWh
                 </div>
-
-                <div className="space-y-4 text-xs">
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span>Winter HVAC Load Delta</span>
-                      <span className="font-bold text-[#e07a16]">+{winterUsageGrowth}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="-15"
-                      max="40"
-                      value={winterUsageGrowth}
-                      onChange={(e) => setWinterUsageGrowth(Number(e.target.value))}
-                      className="w-full accent-[#e07a16]"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span>NYSEG Delivery + Supply Escalation</span>
-                      <span className="font-bold text-[#1f7a4c]">+{utilityRateEscalation}% / yr</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="15"
-                      step="0.5"
-                      value={utilityRateEscalation}
-                      onChange={(e) => setUtilityRateEscalation(Number(e.target.value))}
-                      className="w-full accent-[#1f7a4c]"
-                    />
-                  </div>
-                </div>
-
-                <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-                  <div className={`text-xs ${mutedText}`}>Projected Spring Credit Bank Reserve</div>
-                  <div className="text-2xl font-bold text-[#1f7a4c]">{projectedBank6Mo} kWh</div>
-                  <div className={`text-[11px] ${mutedText}`}>
-                    Avoided utility bill value at escalated rate: $
-                    {(projectedBank6Mo * 0.2007 * (1 + utilityRateEscalation / 100)).toFixed(2)}
-                  </div>
+                <div className="text-xs text-slate-500">
+                  M02: {CREDIT_BANK_FORECAST.unbilled_m02_kwh.toFixed(1)} − M01:{' '}
+                  {CREDIT_BANK_FORECAST.unbilled_m01_kwh.toFixed(1)}
                 </div>
               </div>
+
+              <div className="p-4 rounded-xl border border-slate-200 bg-[#f9fbfd] dark:bg-slate-900 dark:border-slate-800 space-y-1">
+                <div className="text-xs font-semibold text-slate-500">Forecast opening balance</div>
+                <div className="text-2xl font-extrabold text-[#0f5132] dark:text-emerald-400">
+                  {CREDIT_BANK_FORECAST.opening_projected_kwh.toLocaleString('en-US', {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })}{' '}
+                  kWh
+                </div>
+                <div className="text-xs text-slate-500">
+                  Official balance plus estimated unbilled net flow
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl border border-slate-200 bg-[#f9fbfd] dark:bg-slate-900 dark:border-slate-800 space-y-1">
+                <div className="text-xs font-semibold text-slate-500">Credit-bank exhaustion</div>
+                <div className="text-2xl font-extrabold text-[#0f5132] dark:text-emerald-400">
+                  {CREDIT_BANK_FORECAST.exhausted_month || 'Not in next 12 months'}
+                </div>
+                <div className="text-xs text-slate-500">Based on this forecast only</div>
+              </div>
+            </div>
+
+            {/* CALIBRATION & VALIDATION NOTES */}
+            <div className="rounded-xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 p-5 space-y-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              <p>
+                <strong className="text-slate-800 dark:text-slate-200">Forecast quality:</strong>{' '}
+                {CREDIT_BANK_FORECAST.confidence} Calibration through {CREDIT_BANK_FORECAST.calibration_date}.{' '}
+                {CREDIT_BANK_FORECAST.validation?.reconciled_days} matching daily records reconcile;{' '}
+                {CREDIT_BANK_FORECAST.validation?.m02_above_production_days} records have M02 above Sunrun production.
+              </p>
+              <p>
+                <strong className="text-slate-800 dark:text-slate-200">Household-load calibration:</strong> Aug{' '}
+                {Number(CREDIT_BANK_FORECAST.demand_calibration?.august_kwh_per_day || 0).toFixed(2)}, Sep{' '}
+                {Number(CREDIT_BANK_FORECAST.demand_calibration?.september_kwh_per_day || 0).toFixed(2)}, and Oct{' '}
+                {Number(CREDIT_BANK_FORECAST.demand_calibration?.october_kwh_per_day || 0).toFixed(2)} kWh/day. Normal load{' '}
+                {Number(CREDIT_BANK_FORECAST.demand_calibration?.normal_kwh_per_day || 0).toFixed(2)} kWh/day; cooling and heating are modeled separately.
+              </p>
+              <p>
+                <strong className="text-slate-800 dark:text-slate-200">Annual solar validation:</strong>{' '}
+                {Math.round(CREDIT_BANK_FORECAST.annual_solar_validation?.projected_kwh || 0).toLocaleString()} kWh projected versus{' '}
+                {Math.round(CREDIT_BANK_FORECAST.annual_solar_validation?.contractual_kwh || 11141).toLocaleString()} kWh contractual reference (+
+                {Math.round(CREDIT_BANK_FORECAST.annual_solar_validation?.difference_kwh || 0).toLocaleString()} kWh).{' '}
+                {CREDIT_BANK_FORECAST.annual_solar_validation?.note}
+              </p>
             </div>
           </div>
         )}
