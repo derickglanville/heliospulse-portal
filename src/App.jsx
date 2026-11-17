@@ -1,22 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import {
   Sun, Zap, Droplet, Flame, Car, Activity, ShieldCheck, RefreshCw,
-  FileText, AlertTriangle, CheckCircle2, ArrowUpRight, ArrowDownRight,
-  Sliders, MessageSquare, Download, Eye, Layers, Smartphone, Moon, SunMedium,
-  ChevronRight, Lock, Database, Terminal, Calculator, Search, X, ExternalLink,
-  Check, Clock, Sparkles, Server, KeyRound, Plug, FileCode2
+  FileText, AlertTriangle, CheckCircle2, ArrowUpRight,
+  MessageSquare, Download, Eye, Layers, Smartphone, Moon, SunMedium,
+  ChevronRight, Lock, Database, Calculator, X,
+  Check, Clock, Sparkles, Plug, FolderOpen, Upload
 } from 'lucide-react';
+import telemetryData from './data/telemetryData.json';
 
-// --- SEED DATA: JEFFERSON VALLEY, NY (SUNRUN + NYSEG) ---
-const INITIAL_SOLAR_DAILY = [
-  { id: 'SR-9081', date: '2026-11-16', solar_kwh: 28.4, m01_import_kwh: 14.2, m02_export_kwh: 16.8, credit_delta: 2.6, temp_f: 46, irradiance: 'Clear', status: 'RECONCILED', note: 'Peak midday output; heat pump defrost cycle at 06:00' },
-  { id: 'SR-9080', date: '2026-11-15', solar_kwh: 31.2, m01_import_kwh: 12.1, m02_export_kwh: 19.5, credit_delta: 7.4, temp_f: 49, irradiance: 'Clear', status: 'RECONCILED', note: '' },
-  { id: 'SR-9079', date: '2026-11-14', solar_kwh: 11.6, m01_import_kwh: 22.8, m02_export_kwh: 3.1, credit_delta: -19.7, temp_f: 41, irradiance: 'Overcast', status: 'RECONCILED', note: 'Rain/cloud cover all afternoon' },
-  { id: 'SR-9078', date: '2026-11-13', solar_kwh: 29.8, m01_import_kwh: 13.5, m02_export_kwh: 18.0, credit_delta: 4.5, temp_f: 45, irradiance: 'Partly Cloudy', status: 'RECONCILED', note: '' },
-  { id: 'SR-9077', date: '2026-11-12', solar_kwh: 33.1, m01_import_kwh: 11.4, m02_export_kwh: 21.4, credit_delta: 10.0, temp_f: 52, irradiance: 'Clear', status: 'RECONCILED', note: 'Highest November daily yield' },
-  { id: 'SR-9076', date: '2026-11-11', solar_kwh: 19.4, m01_import_kwh: 16.9, m02_export_kwh: 8.2, credit_delta: -8.7, temp_f: 44, irradiance: 'Variable', status: 'RECONCILED', note: '' },
-  { id: 'SR-9075', date: '2026-11-10', solar_kwh: 26.7, m01_import_kwh: 14.8, m02_export_kwh: 15.1, credit_delta: 0.3, temp_f: 48, irradiance: 'Clear', status: 'RECONCILED', note: '' },
-];
+const INITIAL_SOLAR_DAILY = telemetryData.daily_rows;
+const TELEMETRY_META = telemetryData.metadata;
+const MONTHLY_SUMMARIES = telemetryData.monthly_summaries;
 
 const INITIAL_GENERIC_DAILY = [
   { id: 'MR-401', date: '2026-11-16', elec_kwh: 25.8, water_gal: 142, gas_therm: 2.1, ev_kwh: 11.4, est_cost: 9.84, status: 'RECONCILED', note: 'EV overnight Level-2 top-up' },
@@ -26,55 +20,78 @@ const INITIAL_GENERIC_DAILY = [
   { id: 'MR-397', date: '2026-11-12', elec_kwh: 23.1, water_gal: 138, gas_therm: 1.7, ev_kwh: 8.6, est_cost: 8.91, status: 'RECONCILED', note: '' },
 ];
 
-const NYSEG_BILL_REVISIONS = [
-  {
-    revision_id: 'REV-2026-10-B',
-    period: '2026-09-18 to 2026-10-17',
-    statement_date: '2026-10-21',
-    status: 'ACTIVE_REVISED',
-    basic_service_charge: 19.11,
-    m01_billed_kwh: 388,
-    m02_exported_kwh: 512,
-    prior_credit_bank: 1420,
-    ending_credit_bank: 1544,
-    delivery_rate: 0.1142,
-    supply_rate: 0.0865,
-    sbc_ram_surcharge: 4.18,
-    total_due: 23.29,
-    audit_note: 'Corrected statement superseded REV-2026-10-A (+18 kWh M02 interval adjustment).'
-  },
-  {
-    revision_id: 'REV-2026-09-A',
-    period: '2026-08-19 to 2026-09-17',
-    statement_date: '2026-09-20',
-    status: 'ARCHIVED_FINAL',
-    basic_service_charge: 19.11,
-    m01_billed_kwh: 410,
-    m02_exported_kwh: 645,
-    prior_credit_bank: 1185,
-    ending_credit_bank: 1420,
-    delivery_rate: 0.1142,
-    supply_rate: 0.0881,
-    sbc_ram_surcharge: 4.45,
-    total_due: 23.56,
-    audit_note: 'Verified against Green Button ESPI XML batch #882.'
-  }
-];
+// Monthly billing ledger derived directly from the synced CSV monthly summaries
+const NYSEG_BILL_REVISIONS = MONTHLY_SUMMARIES.map((m, idx) => {
+  const basicCharge = 19.11;
+  const deliveryRate = 0.1142;
+  const supplyRate = 0.0865;
+  const netBillableKwh = Math.max(0, m.m01_import_kwh - m.m02_export_kwh - m.prior_credit_bank);
+  const sbcRamSurcharge = Number((m.m01_import_kwh * 0.0095).toFixed(2));
+  const totalDue = Number((basicCharge + sbcRamSurcharge + netBillableKwh * (deliveryRate + supplyRate)).toFixed(2));
+
+  return {
+    revision_id: `CSV-${m.month}-${idx === 0 ? 'LIVE' : 'FINAL'}`,
+    month: m.month,
+    period: `${m.month} (${m.reconciled_days} NYSEG days / ${m.sunrun_days} Sunrun days)`,
+    statement_date: `${m.month}-28`,
+    status: idx === 0 ? 'IN_PROGRESS_MONTH' : 'RECONCILED_CSV',
+    basic_service_charge: basicCharge,
+    solar_produced_kwh: m.solar_kwh,
+    m01_billed_kwh: m.m01_import_kwh,
+    m02_exported_kwh: m.m02_export_kwh,
+    net_delta_kwh: m.credit_delta,
+    prior_credit_bank: m.prior_credit_bank,
+    ending_credit_bank: m.ending_credit_bank,
+    delivery_rate: deliveryRate,
+    supply_rate: supplyRate,
+    sbc_ram_surcharge: sbcRamSurcharge,
+    total_due: totalDue,
+    audit_note: `Aggregated from Sunrun_Daily_Production_Data.csv (${m.solar_kwh} kWh) & NYSEG_Daily_Usage_Data.csv (Delivered: ${m.m01_import_kwh} kWh, Received: ${m.m02_export_kwh} kWh).`,
+  };
+});
 
 const ASSET_CATALOG = [
-  { id: 'AST-01', name: 'Sunrun Rooftop Array (9.6 kW DC)', category: 'Generation', metric: '28.4 kWh/day avg', health: '99.2% Guarantee Pace', connector: 'Sunrun Telemetry API' },
-  { id: 'AST-02', name: 'NYSEG Bidirectional Smart Meter (M01/M02)', category: 'Utility Grid', metric: '1,544 kWh Bank', health: 'Synced (15-min ESPI)', connector: 'NYSEG Green Button' },
-  { id: 'AST-03', name: 'DuctlessAire 18k BTU Mini-Split (DA1821)', category: 'HVAC Load', metric: '~4.8 kWh/day', health: 'Normal Winter Defrost', connector: 'Circuit CT Clamp #4' },
-  { id: 'AST-04', name: 'GE JS645SL1SS Electric Range', category: 'Appliance', metric: '~1.9 kWh/day', health: 'Nominal', connector: 'Sub-panel Sensor #2' },
+  {
+    id: 'AST-01',
+    name: 'Sunrun Rooftop Array',
+    category: 'Generation',
+    metric: `${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh cumulative (${(TELEMETRY_META.cumulative_solar_kwh / 129).toFixed(1)} kWh/day avg)`,
+    health: `${TELEMETRY_META.sunrun_total_rows} CSV Daily Records Loaded`,
+    connector: 'Sunrun_Daily_Production_Data.csv',
+  },
+  {
+    id: 'AST-02',
+    name: 'NYSEG Bidirectional Smart Meter (Delivered / Received)',
+    category: 'Utility Grid',
+    metric: `${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh Net Credit Bank`,
+    health: `${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} Hourly Intervals (${TELEMETRY_META.reconciled_days} Days)`,
+    connector: 'NYSEG_Daily_Usage_Data.csv',
+  },
+  {
+    id: 'AST-03',
+    name: 'DuctlessAire 18k BTU Mini-Split (DA1821)',
+    category: 'HVAC Load',
+    metric: '~4.8 kWh/day',
+    health: 'Normal Winter Defrost',
+    connector: 'Circuit CT Clamp #4',
+  },
+  {
+    id: 'AST-04',
+    name: 'GE JS645SL1SS Electric Range',
+    category: 'Appliance',
+    metric: '~1.9 kWh/day',
+    health: 'Nominal',
+    connector: 'Sub-panel Sensor #2',
+  },
 ];
 
 const SYNC_STEPS = [
-  { id: 1, title: 'Connect Providers', detail: 'Authenticate Sunrun OAuth & NYSEG Green Button tokens via OS Keyring' },
-  { id: 2, title: 'Retrieve Telemetry & Bills', detail: 'Fetch delta daily kWh intervals + billing revision PDFs/XML' },
-  { id: 3, title: 'Validate & Reconcile', detail: 'Enforce M02_export <= Solar_production + 0.5 kWh physical bound' },
-  { id: 4, title: 'Anomaly & Gap Detection', detail: 'Scan for missing intervals, revised statements, or inverter derating' },
-  { id: 5, title: 'Recompute Models & Forecasts', detail: 'Update NYSEG net-metering credit bank & rolling 12-mo cost curve' },
-  { id: 6, title: 'Publish Mobile Snapshot', detail: 'Strip account IDs & write sanitized JSON to GitHub Pages branch' },
+  { id: 1, title: 'Read Local CSV Sources', detail: 'Load Sunrun_Daily_Production_Data.csv & NYSEG_Daily_Usage_Data.csv' },
+  { id: 2, title: 'Aggregate NYSEG Hourly', detail: `Group ${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly Delivered/Received/Weather rows into daily totals` },
+  { id: 3, title: 'Validate & Reconcile', detail: 'Enforce Received (M02) <= Solar_production + 0.5 kWh physical bound' },
+  { id: 4, title: 'Anomaly & Gap Detection', detail: `Flag ${TELEMETRY_META.sunrun_only_days} Sunrun-only dates & DST 25-hr interval days` },
+  { id: 5, title: 'Recompute Credit Bank', detail: `Calculate cumulative net credit bank (+${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh)` },
+  { id: 6, title: 'Publish Sanitized Snapshot', detail: 'Strip PII (Name/Address/Account#) & write telemetryData.json' },
 ];
 
 export default function HeliosPulsePortal() {
@@ -82,6 +99,7 @@ export default function HeliosPulsePortal() {
   const [domainMode, setDomainMode] = useState('solar'); // 'solar' | 'generic'
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'grid' | 'connectors' | 'billing' | 'assets'
   const [spanFilter, setSpanFilter] = useState('weekly'); // 'weekly' | 'monthly' | 'yearly'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -94,19 +112,35 @@ export default function HeliosPulsePortal() {
   // Sync Pipeline State
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeSyncStep, setActiveSyncStep] = useState(0);
-  const [lastSyncTime, setLastSyncTime] = useState('2026-11-17 06:00:14 EST');
+  const [lastSyncTime, setLastSyncTime] = useState(
+    TELEMETRY_META.generated_at.replace('T', ' ').slice(0, 19) + ' UTC'
+  );
   const [syncLogs, setSyncLogs] = useState([
-    { ts: '2026-11-17 06:00:14', provider: 'Coordinator', status: 'VERIFIED_COMPLETE', msg: 'Published sanitized snapshot (7/7 days reconciled, 0 gaps).' },
-    { ts: '2026-11-17 06:00:11', provider: 'NYSEGConnector', status: 'SUCCESS', msg: 'Fetched 7 daily M01/M02 summaries + active revision REV-2026-10-B.' },
-    { ts: '2026-11-17 06:00:08', provider: 'SunrunConnector', status: 'SUCCESS', msg: 'Fetched 7 daily production records (SR-9075..SR-9081).' },
+    {
+      ts: TELEMETRY_META.generated_at.replace('T', ' ').slice(0, 19),
+      provider: 'Coordinator',
+      status: 'VERIFIED_COMPLETE',
+      msg: `Synced ${TELEMETRY_META.sunrun_total_rows} Sunrun days (${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh) & ${TELEMETRY_META.reconciled_days} NYSEG days (${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly rows).`,
+    },
+    {
+      ts: TELEMETRY_META.generated_at.replace('T', ' ').slice(0, 19),
+      provider: 'NYSEGConnector',
+      status: 'SUCCESS',
+      msg: `Loaded ${TELEMETRY_META.nyseg_source_path} (Delivered: ${TELEMETRY_META.cumulative_m01_import_kwh} kWh, Received: ${TELEMETRY_META.cumulative_m02_export_kwh} kWh).`,
+    },
+    {
+      ts: TELEMETRY_META.generated_at.replace('T', ' ').slice(0, 19),
+      provider: 'SunrunConnector',
+      status: 'SUCCESS',
+      msg: `Loaded ${TELEMETRY_META.sunrun_source_path} (${TELEMETRY_META.date_range_start} to ${TELEMETRY_META.date_range_end}).`,
+    },
   ]);
 
-  // Connector Configuration (Volatile Memory Only - Never Stored in localStorage)
-  const [bridgeUrl, setBridgeUrl] = useState('http://localhost:5050/api/v1/sync');
-  const [sunrunSiteId, setSunrunSiteId] = useState('SR-JV-10598-A');
-  const [nysegAccountId, setNysegAccountId] = useState('1004-XXXX-892');
+  // Connector Configuration
+  const [sunrunCsvPathInput, setSunrunCsvPathInput] = useState(TELEMETRY_META.sunrun_source_path);
+  const [nysegCsvPathInput, setNysegCsvPathInput] = useState(TELEMETRY_META.nyseg_source_path);
   const [rawPayloadInput, setRawPayloadInput] = useState(
-    '{\n  "provider": "sunrun",\n  "id": "SR-9082",\n  "date": "2026-11-17",\n  "production_kwh": 29.6,\n  "m01_import_kwh": 13.1,\n  "m02_export_kwh": 17.9\n}'
+    '{\n  "provider": "sunrun",\n  "id": "SR-9133",\n  "date": "2026-11-16",\n  "production_kwh": 24.8,\n  "m01_import_kwh": 18.2,\n  "m02_export_kwh": 11.4\n}'
   );
   const [ingestBanner, setIngestBanner] = useState(null);
 
@@ -117,42 +151,79 @@ export default function HeliosPulsePortal() {
   const [aiMessages, setAiMessages] = useState([
     {
       role: 'assistant',
-      text: 'Connected to your verified Jefferson Valley ledger (1,544 kWh NYSEG credit bank). Ask about production variance, NYSEG bill revisions, or seasonal winter drawdown.'
-    }
+      text: `Connected to your real CSV dataset (${TELEMETRY_META.date_range_start} to ${TELEMETRY_META.date_range_end}): ${TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh cumulative Sunrun production and +${TELEMETRY_META.cumulative_net_credit_bank_kwh.toFixed(1)} kWh NYSEG net-metering credit bank across ${TELEMETRY_META.reconciled_days} reconciled days.`,
+    },
   ]);
 
   // What-If Scenario Sliders
-  const [winterUsageGrowth, setWinterUsageGrowth] = useState(10); // % HVAC load increase
-  const [utilityRateEscalation, setUtilityRateEscalation] = useState(4.5); // % annual NYSEG delivery/supply increase
+  const [winterUsageGrowth, setWinterUsageGrowth] = useState(10);
+  const [utilityRateEscalation, setUtilityRateEscalation] = useState(4.5);
 
-  // Computed KPIs
+  // Rows filtered by span ('weekly' = 7 active days, 'monthly' = 30 active days, 'yearly' = all 132 days)
+  const spanFilteredRows = useMemo(() => {
+    // Filter out trailing 0-production pending placeholder days for weekly/monthly KPI slices unless viewing all
+    const activeRows = solarRows.filter((r) => r.status !== 'PENDING_TELEMETRY');
+    const base =
+      statusFilter === 'all'
+        ? spanFilter === 'yearly'
+          ? solarRows
+          : activeRows
+        : solarRows.filter((r) => r.status === statusFilter);
+
+    if (spanFilter === 'weekly') return base.slice(0, 7);
+    if (spanFilter === 'monthly') return base.slice(0, 30);
+    return base;
+  }, [solarRows, spanFilter, statusFilter]);
+
+  // Overall cumulative & current span KPIs
   const solarTotals = useMemo(() => {
-    const prod = solarRows.reduce((acc, r) => acc + r.solar_kwh, 0);
-    const imp = solarRows.reduce((acc, r) => acc + r.m01_import_kwh, 0);
-    const exp = solarRows.reduce((acc, r) => acc + r.m02_export_kwh, 0);
-    const netDelta = exp - imp;
+    const allReconciled = solarRows.filter((r) => r.status === 'RECONCILED');
+    const cumSolar = solarRows.reduce((acc, r) => acc + (r.solar_kwh || 0), 0);
+    const cumImp = allReconciled.reduce((acc, r) => acc + (r.m01_import_kwh || 0), 0);
+    const cumExp = allReconciled.reduce((acc, r) => acc + (r.m02_export_kwh || 0), 0);
+    const cumBank = cumExp - cumImp;
+
+    const spanProd = spanFilteredRows.reduce((acc, r) => acc + (r.solar_kwh || 0), 0);
+    const spanImp = spanFilteredRows.reduce((acc, r) => acc + (r.m01_import_kwh || 0), 0);
+    const spanExp = spanFilteredRows.reduce((acc, r) => acc + (r.m02_export_kwh || 0), 0);
+    const spanNetDelta = spanExp - spanImp;
+
+    const maxEodMeter = Math.max(...solarRows.map((r) => r.eod_meter_kwh || 0));
+
     return {
-      prod: prod.toFixed(1),
-      imp: imp.toFixed(1),
-      exp: exp.toFixed(1),
-      netDelta: (netDelta >= 0 ? '+' : '') + netDelta.toFixed(1),
-      bankBalance: (1544 + netDelta).toFixed(0),
-      estMonthlySavings: ((prod * 0.2007)).toFixed(2),
+      cumSolar: cumSolar.toFixed(1),
+      cumImp: cumImp.toFixed(1),
+      cumExp: cumExp.toFixed(1),
+      bankBalance: cumBank.toFixed(1),
+      maxEodMeter: maxEodMeter.toFixed(1),
+      prod: spanProd.toFixed(1),
+      imp: spanImp.toFixed(1),
+      exp: spanExp.toFixed(1),
+      netDelta: (spanNetDelta >= 0 ? '+' : '') + spanNetDelta.toFixed(1),
+      reconciledCount: allReconciled.length,
+      totalDays: solarRows.length,
     };
-  }, [solarRows]);
+  }, [solarRows, spanFilteredRows]);
 
   const sortedSolarRows = useMemo(() => {
-    return [...solarRows].sort((a, b) => {
-      const valA = a[sortField];
-      const valB = b[sortField];
+    return [...spanFilteredRows].sort((a, b) => {
+      const valA = a[sortField] ?? -999999;
+      const valB = b[sortField] ?? -999999;
       if (valA < valB) return sortAsc ? -1 : 1;
       if (valA > valB) return sortAsc ? 1 : -1;
       return 0;
     });
-  }, [solarRows, sortField, sortAsc]);
+  }, [spanFilteredRows, sortField, sortAsc]);
+
+  // Last 14 reconciled days for the dashboard chart (or 7 when weekly)
+  const chartRows = useMemo(() => {
+    const reconciled = solarRows.filter((r) => r.status === 'RECONCILED');
+    const count = spanFilter === 'weekly' ? 7 : 14;
+    return reconciled.slice(0, count).reverse();
+  }, [solarRows, spanFilter]);
 
   const projectedBank6Mo = useMemo(() => {
-    const monthlyDrawdown = 185 * (1 + winterUsageGrowth / 100);
+    const monthlyDrawdown = 165 * (1 + winterUsageGrowth / 100);
     return Math.max(0, Math.round(Number(solarTotals.bankBalance) - monthlyDrawdown * 4 + 420));
   }, [solarTotals.bankBalance, winterUsageGrowth]);
 
@@ -176,12 +247,112 @@ export default function HeliosPulsePortal() {
             ts: nowStr,
             provider: 'Coordinator',
             status: 'VERIFIED_COMPLETE',
-            msg: `All 6 pipeline gates passed (${solarRows.length} records reconciled & mobile snapshot published).`
+            msg: `All 6 pipeline gates passed (${solarRows.length} Sunrun days & ${solarTotals.reconciledCount} NYSEG days reconciled).`,
           },
-          ...prev
+          ...prev,
         ]);
       }
-    }, 550);
+    }, 450);
+  };
+
+  // Browser CSV Upload handler so the user can also re-import updated CSV files directly in the UI
+  const handleCsvFileUpload = async (e, type) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const lines = text.trim().split(/\r?\n/).slice(1);
+
+    if (type === 'sunrun') {
+      const srUpdates = new Map();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const [dateRaw, prodRaw, eodRaw] = line.split(',');
+        const date = dateRaw.replace(/"/g, '').trim();
+        srUpdates.set(date, {
+          solar_kwh: Number(Number(prodRaw || 0).toFixed(3)),
+          eod_meter_kwh: Number(Number(eodRaw || 0).toFixed(3)),
+        });
+      }
+      setSolarRows((prev) => {
+        const byDate = new Map(prev.map((r) => [r.date, { ...r }]));
+        for (const [date, sr] of srUpdates.entries()) {
+          const existing = byDate.get(date);
+          if (existing) {
+            existing.solar_kwh = sr.solar_kwh;
+            existing.eod_meter_kwh = sr.eod_meter_kwh;
+            if (existing.m01_import_kwh !== null) {
+              existing.status = 'RECONCILED';
+            } else if (sr.solar_kwh > 0) {
+              existing.status = 'SUNRUN_ONLY';
+            }
+          } else {
+            byDate.set(date, {
+              id: `SR-${byDate.size + 9001}`,
+              date,
+              solar_kwh: sr.solar_kwh,
+              eod_meter_kwh: sr.eod_meter_kwh,
+              m01_import_kwh: null,
+              m02_export_kwh: null,
+              credit_delta: null,
+              temp_f: null,
+              nyseg_hours: 0,
+              irradiance: sr.solar_kwh > 25 ? 'Clear' : 'Variable',
+              status: sr.solar_kwh > 0 ? 'SUNRUN_ONLY' : 'PENDING_TELEMETRY',
+              note: 'Imported from Sunrun CSV',
+            });
+          }
+        }
+        return [...byDate.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
+      });
+      setIngestBanner({
+        type: 'success',
+        text: `Reloaded ${srUpdates.size} daily records from ${file.name}.`,
+      });
+    } else if (type === 'nyseg') {
+      const nyUpdates = new Map();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const parts = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+        const date = (parts[5] || '').trim();
+        if (!date) continue;
+        const weather = parts[11] !== '' ? Number(parts[11]) : null;
+        const delivered = Number(parts[12] || 0);
+        const received = Number(parts[13] || 0);
+        if (!nyUpdates.has(date)) nyUpdates.set(date, { delivered: 0, received: 0, temps: [], hours: 0 });
+        const d = nyUpdates.get(date);
+        d.delivered += delivered;
+        d.received += received;
+        if (weather !== null && !Number.isNaN(weather)) d.temps.push(weather);
+        d.hours += 1;
+      }
+      setSolarRows((prev) => {
+        const byDate = new Map(prev.map((r) => [r.date, { ...r }]));
+        for (const [date, ny] of nyUpdates.entries()) {
+          const existing = byDate.get(date) || {
+            id: `SR-${byDate.size + 9001}`,
+            date,
+            solar_kwh: 0,
+            eod_meter_kwh: 0,
+            irradiance: 'Variable',
+            note: '',
+          };
+          existing.m01_import_kwh = Number(ny.delivered.toFixed(3));
+          existing.m02_export_kwh = Number(ny.received.toFixed(3));
+          existing.credit_delta = Number((ny.received - ny.delivered).toFixed(3));
+          existing.temp_f = ny.temps.length
+            ? Math.round(ny.temps.reduce((a, b) => a + b, 0) / ny.temps.length)
+            : null;
+          existing.nyseg_hours = ny.hours;
+          existing.status = 'RECONCILED';
+          byDate.set(date, existing);
+        }
+        return [...byDate.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
+      });
+      setIngestBanner({
+        type: 'success',
+        text: `Aggregated ${lines.length.toLocaleString()} hourly intervals (${nyUpdates.size} days) from ${file.name}.`,
+      });
+    }
   };
 
   const handleIngestRawPayload = () => {
@@ -199,36 +370,67 @@ export default function HeliosPulsePortal() {
       const newRow = {
         id: parsed.id || `SR-${Math.floor(9100 + Math.random() * 899)}`,
         date: parsed.date,
-        solar_kwh: Number(parsed.production_kwh.toFixed(1)),
-        m01_import_kwh: Number(m01.toFixed(1)),
-        m02_export_kwh: Number(m02.toFixed(1)),
-        credit_delta: Number((m02 - m01).toFixed(1)),
+        solar_kwh: Number(parsed.production_kwh.toFixed(3)),
+        eod_meter_kwh: Number(solarTotals.maxEodMeter),
+        m01_import_kwh: Number(m01.toFixed(3)),
+        m02_export_kwh: Number(m02.toFixed(3)),
+        credit_delta: Number((m02 - m01).toFixed(3)),
         temp_f: 45,
+        nyseg_hours: 24,
         irradiance: 'Clear',
         status: 'RECONCILED',
-        note: 'Ingested via Connector Payload Parser'
+        note: 'Ingested via Connector Payload Parser',
       };
 
-      setSolarRows((prev) => [newRow, ...prev.filter((r) => r.date !== newRow.date)]);
-      setIngestBanner({ type: 'success', text: `Validated & reconciled ${newRow.date} (${newRow.id}). Dashboard KPIs updated.` });
+      setSolarRows((prev) =>
+        [newRow, ...prev.filter((r) => r.date !== newRow.date)].sort((a, b) => (a.date < b.date ? 1 : -1))
+      );
+      setIngestBanner({
+        type: 'success',
+        text: `Validated & reconciled ${newRow.date} (${newRow.id}). Dashboard KPIs updated.`,
+      });
     } catch (err) {
       setIngestBanner({ type: 'error', text: err.message });
     }
   };
 
   const handleExportCsv = () => {
-    const headers = ['Record_ID', 'Date', 'Solar_Production_kWh', 'NYSEG_M01_Import_kWh', 'NYSEG_M02_Export_kWh', 'Net_Credit_Delta_kWh', 'Status', 'Note'];
+    const headers = [
+      'Record_ID',
+      'Date',
+      'Solar_Production_kWh',
+      'End_Of_Day_Meter_kWh',
+      'NYSEG_M01_Delivered_kWh',
+      'NYSEG_M02_Received_kWh',
+      'Net_Credit_Delta_kWh',
+      'Avg_Temp_F',
+      'NYSEG_Hours',
+      'Status',
+      'Note',
+    ];
     const csvLines = [
       headers.join(','),
       ...sortedSolarRows.map((r) =>
-        [r.id, r.date, r.solar_kwh, r.m01_import_kwh, r.m02_export_kwh, r.credit_delta, r.status, `"${r.note.replace(/"/g, '""')}"`].join(',')
-      )
+        [
+          r.id,
+          r.date,
+          r.solar_kwh,
+          r.eod_meter_kwh ?? '',
+          r.m01_import_kwh ?? '',
+          r.m02_export_kwh ?? '',
+          r.credit_delta ?? '',
+          r.temp_f ?? '',
+          r.nyseg_hours ?? 0,
+          r.status,
+          `"${(r.note || '').replace(/"/g, '""')}"`,
+        ].join(',')
+      ),
     ];
     const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `heliospulse_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `heliospulse_export_${spanFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -238,11 +440,11 @@ export default function HeliosPulsePortal() {
     if (!q) return;
     let reply = '';
     if (q.toLowerCase().includes('credit') || q.toLowerCase().includes('bank')) {
-      reply = `Your NYSEG net-metering credit bank sits at ${solarTotals.bankBalance} kWh (1,544 kWh per active statement REV-2026-10-B plus ${solarTotals.netDelta} kWh net export in the current 7-day window). Even with a +${winterUsageGrowth}% winter heat-pump load increase, your bank covers winter deficits through April.`;
-    } else if (q.toLowerCase().includes('bill') || q.toLowerCase().includes('nyseg')) {
-      reply = `Your latest NYSEG bill ($23.29 for period ending 2026-10-17) consists solely of the $19.11 Basic Service Charge plus $4.18 SBC/RAM surcharges because your 512 kWh M02 exports exceeded your 388 kWh M01 imports by 124 kWh. Revision REV-2026-10-B automatically superseded REV-2026-10-A after adding 18 kWh of interval exports.`;
+      reply = `Across all ${solarTotals.reconciledCount} reconciled NYSEG days (${TELEMETRY_META.date_range_start} to ${TELEMETRY_META.latest_reconciled_date}), NYSEG Received (M02 Export) totaled ${solarTotals.cumExp} kWh and NYSEG Delivered (M01 Import) totaled ${solarTotals.cumImp} kWh, resulting in a cumulative Net-Metering Credit Bank of +${solarTotals.bankBalance} kWh.`;
+    } else if (q.toLowerCase().includes('bill') || q.toLowerCase().includes('nyseg') || q.toLowerCase().includes('month')) {
+      reply = `Monthly net bank additions from your CSVs: Aug 2026 (+853.60 kWh), Sep 2026 (+580.01 kWh), Oct 2026 (+227.42 kWh), and Nov 2026 MTD (-130.18 kWh seasonal drawdown). Note that Oct 29–30 and Nov 13 & 15 have Sunrun generation logged (${TELEMETRY_META.sunrun_only_days} Sunrun-only days total) awaiting NYSEG interval export.`;
     } else {
-      reply = `Over the last 7 days, your Sunrun array generated ${solarTotals.prod} kWh while NYSEG M01 grid imports totaled ${solarTotals.imp} kWh and M02 exports totaled ${solarTotals.exp} kWh. Peak output occurred on 2026-11-12 (33.1 kWh, 52°F, Clear).`;
+      reply = `Your Sunrun array has produced ${solarTotals.cumSolar} kWh cumulatively across ${solarTotals.totalDays} CSV days (End-of-Day Meter Reading: ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}). In the currently selected ${spanFilter} view (${spanFilteredRows.length} days), solar production is ${solarTotals.prod} kWh, M01 Delivered is ${solarTotals.imp} kWh, and M02 Received is ${solarTotals.exp} kWh.`;
     }
     setAiMessages((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: reply }]);
     setAiQuery('');
@@ -278,12 +480,12 @@ export default function HeliosPulsePortal() {
               <div className="flex items-center gap-2">
                 <span className="font-bold tracking-tight text-base sm:text-lg">HeliosPulse</span>
                 <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  Intelligence Portal
+                  CSV Telemetry Live
                 </span>
               </div>
               <p className={`text-xs hidden sm:block ${mutedText}`}>
                 {domainMode === 'solar'
-                  ? 'Jefferson Valley, NY • Sunrun Telemetry + NYSEG Net-Metering'
+                  ? `${TELEMETRY_META.location} • ${TELEMETRY_META.sunrun_total_rows} Sunrun Days + ${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} NYSEG Hourly Intervals`
                   : 'White-Label Multi-Resource Mode • Electricity, Water, Gas & EV'}
               </p>
             </div>
@@ -291,7 +493,6 @@ export default function HeliosPulsePortal() {
 
           {/* RIGHT CONTROLS */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Domain Architecture Switcher */}
             <div className={`hidden md:flex items-center p-1 rounded-lg border text-xs font-medium ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
               <button
                 onClick={() => setDomainMode('solar')}
@@ -344,31 +545,55 @@ export default function HeliosPulsePortal() {
         </div>
 
         {/* SUB-NAVIGATION TABS */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center gap-1 overflow-x-auto border-t border-slate-800/40 text-xs font-medium">
-          {[
-            { id: 'dashboard', label: 'Executive Dashboard', icon: Activity },
-            { id: 'grid', label: 'Daily Ledger & Audit', icon: Database },
-            { id: 'connectors', label: 'Provider Connectors', icon: Plug },
-            { id: 'billing', label: 'Bills & What-If Engine', icon: Calculator },
-            { id: 'assets', label: 'Asset & Circuit Catalog', icon: Layers },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 whitespace-nowrap transition ${
-                  active
-                    ? 'border-amber-400 text-amber-400 font-semibold'
-                    : `border-transparent ${mutedText} hover:text-slate-200`
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-2 overflow-x-auto border-t border-slate-800/40 text-xs font-medium">
+          <div className="flex items-center gap-1">
+            {[
+              { id: 'dashboard', label: 'Executive Dashboard', icon: Activity },
+              { id: 'grid', label: `Daily Ledger & Audit (${solarRows.length})`, icon: Database },
+              { id: 'connectors', label: 'CSV Sources & Connectors', icon: Plug },
+              { id: 'billing', label: 'Monthly Ledger & What-If', icon: Calculator },
+              { id: 'assets', label: 'Asset & Circuit Catalog', icon: Layers },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 whitespace-nowrap transition ${
+                    active
+                      ? 'border-amber-400 text-amber-400 font-semibold'
+                      : `border-transparent ${mutedText} hover:text-slate-200`
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* GLOBAL SPAN SWITCHER */}
+          <div className="hidden sm:flex items-center gap-1.5 py-1.5">
+            <span className={`text-[11px] ${mutedText}`}>Window:</span>
+            <div className="flex rounded-lg border border-slate-700 overflow-hidden text-[11px]">
+              {[
+                { id: 'weekly', label: '7 Days' },
+                { id: 'monthly', label: '30 Days' },
+                { id: 'yearly', label: `All (${solarRows.length}d)` },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSpanFilter(s.id)}
+                  className={`px-2.5 py-1 transition ${
+                    spanFilter === s.id ? 'bg-amber-500 text-slate-950 font-semibold' : mutedText
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -380,13 +605,13 @@ export default function HeliosPulsePortal() {
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span className="text-xs font-semibold uppercase tracking-wider">
-                Automated 6-Stage Ingestion & Reconciliation Gate
+                Automated 6-Stage CSV Ingestion & Reconciliation Gate
               </span>
               <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                VERIFIED_COMPLETE
+                {solarTotals.reconciledCount} RECONCILED / {TELEMETRY_META.sunrun_only_days} SUNRUN-ONLY
               </span>
             </div>
-            <span className={`text-xs ${mutedText}`}>Last Snapshot Published: {lastSyncTime}</span>
+            <span className={`text-xs ${mutedText}`}>Last CSV Sync: {lastSyncTime}</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
@@ -431,48 +656,50 @@ export default function HeliosPulsePortal() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className={`rounded-xl border p-4 ${cardBg}`}>
                     <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>Sunrun Generation (7d)</span>
+                      <span className={mutedText}>
+                        Sunrun Generation ({spanFilter === 'weekly' ? '7d' : spanFilter === 'monthly' ? '30d' : 'All'})
+                      </span>
                       <Sun className="w-4 h-4 text-amber-400" />
                     </div>
                     <div className="text-2xl font-bold">{solarTotals.prod} kWh</div>
                     <div className="flex items-center gap-1 text-xs text-emerald-400 mt-1">
                       <ArrowUpRight className="w-3.5 h-3.5" />
-                      <span>+6.4% vs. November rolling model</span>
+                      <span>Cumulative EOD Meter: { Number(solarTotals.maxEodMeter).toLocaleString() } kWh</span>
                     </div>
                   </div>
 
                   <div className={`rounded-xl border p-4 ${cardBg}`}>
                     <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>NYSEG Net-Metering Bank</span>
+                      <span className={mutedText}>Cumulative NYSEG Credit Bank</span>
                       <Database className="w-4 h-4 text-emerald-400" />
                     </div>
-                    <div className="text-2xl font-bold">{solarTotals.bankBalance} kWh</div>
+                    <div className="text-2xl font-bold">+{solarTotals.bankBalance} kWh</div>
                     <div className="flex items-center gap-1 text-xs text-emerald-400 mt-1">
-                      <span>{solarTotals.netDelta} kWh net export this week</span>
+                      <span>{solarTotals.netDelta} kWh net in selected window</span>
                     </div>
                   </div>
 
                   <div className={`rounded-xl border p-4 ${cardBg}`}>
                     <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>M01 Import / M02 Export</span>
+                      <span className={mutedText}>M01 Delivered / M02 Received</span>
                       <Zap className="w-4 h-4 text-sky-400" />
                     </div>
                     <div className="text-2xl font-bold">
                       {solarTotals.imp} / <span className="text-emerald-400">{solarTotals.exp}</span>
                     </div>
                     <div className={`text-xs mt-1 ${mutedText}`}>
-                      Export ratio: {((Number(solarTotals.exp) / Number(solarTotals.prod)) * 100).toFixed(0)}% sent to grid
+                      All-time: {solarTotals.cumImp} Del / {solarTotals.cumExp} Rec kWh
                     </div>
                   </div>
 
                   <div className={`rounded-xl border p-4 ${cardBg}`}>
                     <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={mutedText}>Latest NYSEG Statement</span>
+                      <span className={mutedText}>CSV Coverage & Reconciliation</span>
                       <FileText className="w-4 h-4 text-indigo-400" />
                     </div>
-                    <div className="text-2xl font-bold">$23.29</div>
+                    <div className="text-2xl font-bold">{solarTotals.reconciledCount} / {solarTotals.totalDays}d</div>
                     <div className="text-xs text-indigo-400 mt-1">
-                      Basic charge + surcharges only ($0 supply)
+                      {TELEMETRY_META.date_range_start} → {TELEMETRY_META.date_range_end}
                     </div>
                   </div>
                 </div>
@@ -480,41 +707,52 @@ export default function HeliosPulsePortal() {
                 {/* INTERACTIVE VISUALIZATION: PRODUCTION VS IMPORT/EXPORT */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className={`lg:col-span-2 rounded-xl border p-5 ${cardBg}`}>
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                       <div>
-                        <h3 className="font-semibold text-sm">Daily Energy Balance: Sunrun Production vs. NYSEG M01/M02</h3>
-                        <p className={`text-xs ${mutedText}`}>Reconciled 24-hour meter intervals (kWh)</p>
+                        <h3 className="font-semibold text-sm">
+                          Daily Energy Balance: Sunrun Production vs. NYSEG Delivered/Received ({chartRows.length} Reconciled Days)
+                        </h3>
+                        <p className={`text-xs ${mutedText}`}>
+                          Source: Sunrun_Daily_Production_Data.csv & NYSEG_Daily_Usage_Data.csv
+                        </p>
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" /> Solar</span>
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" /> M02 Export</span>
-                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block" /> M01 Import</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" /> M02 Received</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block" /> M01 Delivered</span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-7 gap-3 items-end h-52 pt-4 px-2 border-b border-slate-800/60">
-                      {[...solarRows].reverse().map((row) => {
-                        const maxVal = 36;
-                        const solarH = Math.min(100, (row.solar_kwh / maxVal) * 100);
-                        const expH = Math.min(100, (row.m02_export_kwh / maxVal) * 100);
-                        const impH = Math.min(100, (row.m01_import_kwh / maxVal) * 100);
+                    <div
+                      className="grid gap-2 items-end h-52 pt-4 px-2 border-b border-slate-800/60"
+                      style={{ gridTemplateColumns: `repeat(${chartRows.length}, minmax(0, 1fr))` }}
+                    >
+                      {chartRows.map((row) => {
+                        const maxVal = Math.max(40, ...chartRows.map((r) => Math.max(r.solar_kwh || 0, r.m01_import_kwh || 0, r.m02_export_kwh || 0)));
+                        const solarH = Math.min(100, ((row.solar_kwh || 0) / maxVal) * 100);
+                        const expH = Math.min(100, ((row.m02_export_kwh || 0) / maxVal) * 100);
+                        const impH = Math.min(100, ((row.m01_import_kwh || 0) / maxVal) * 100);
                         return (
-                          <div key={row.date} className="flex flex-col items-center h-full justify-end group">
-                            <div className="w-full flex items-end justify-center gap-1 h-40">
+                          <div
+                            key={row.date}
+                            onClick={() => setSelectedAuditRow(row)}
+                            className="flex flex-col items-center h-full justify-end group cursor-pointer"
+                          >
+                            <div className="w-full flex items-end justify-center gap-0.5 h-40">
                               <div
                                 style={{ height: `${solarH}%` }}
-                                title={`Solar: ${row.solar_kwh} kWh`}
-                                className="w-2.5 sm:w-3.5 bg-amber-400 rounded-t transition-all group-hover:opacity-80"
+                                title={`${row.date} • Solar: ${row.solar_kwh} kWh`}
+                                className="w-2 sm:w-3 bg-amber-400 rounded-t transition-all group-hover:opacity-80"
                               />
                               <div
                                 style={{ height: `${expH}%` }}
-                                title={`M02 Export: ${row.m02_export_kwh} kWh`}
-                                className="w-2.5 sm:w-3.5 bg-emerald-400 rounded-t transition-all group-hover:opacity-80"
+                                title={`${row.date} • NYSEG Received (M02): ${row.m02_export_kwh} kWh`}
+                                className="w-2 sm:w-3 bg-emerald-400 rounded-t transition-all group-hover:opacity-80"
                               />
                               <div
                                 style={{ height: `${impH}%` }}
-                                title={`M01 Import: ${row.m01_import_kwh} kWh`}
-                                className="w-2.5 sm:w-3.5 bg-rose-400 rounded-t transition-all group-hover:opacity-80"
+                                title={`${row.date} • NYSEG Delivered (M01): ${row.m01_import_kwh} kWh`}
+                                className="w-2 sm:w-3 bg-rose-400 rounded-t transition-all group-hover:opacity-80"
                               />
                             </div>
                             <span className={`text-[10px] mt-2 font-mono ${mutedText}`}>{row.date.slice(5)}</span>
@@ -524,23 +762,29 @@ export default function HeliosPulsePortal() {
                     </div>
                   </div>
 
-                  {/* THREE-LAYER ARCHITECTURAL OVERVIEW */}
+                  {/* ACTIVE CSV SOURCES SUMMARY */}
                   <div className={`rounded-xl border p-5 flex flex-col justify-between ${cardBg}`}>
                     <div>
-                      <h3 className="font-semibold text-sm mb-1">Three-Layer Portal Architecture</h3>
-                      <p className={`text-xs mb-4 ${mutedText}`}>Modular design ready for commercial white-label deployment</p>
+                      <h3 className="font-semibold text-sm mb-1">Active Phase Data Sources</h3>
+                      <p className={`text-xs mb-4 ${mutedText}`}>Direct CSV ingestion with PII sanitization</p>
                       <div className="space-y-3 text-xs">
                         <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/40">
-                          <div className="font-semibold text-amber-400">1. Data Connectors Layer</div>
-                          <p className={`mt-0.5 ${mutedText}`}>Sunrun Telemetry API, NYSEG Green Button ESPI XML, CSV/PDF fallback.</p>
+                          <div className="font-semibold text-amber-400">1. Sunrun Daily Production CSV</div>
+                          <p className={`mt-1 font-mono text-[10px] break-all ${mutedText}`}>
+                            {TELEMETRY_META.sunrun_source_path}
+                          </p>
+                          <p className="mt-1 text-emerald-400 font-medium">
+                            {TELEMETRY_META.sunrun_total_rows} days • {TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh produced
+                          </p>
                         </div>
                         <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/40">
-                          <div className="font-semibold text-emerald-400">2. Rules & Audit Engine</div>
-                          <p className={`mt-0.5 ${mutedText}`}>Tariff calculators, revision-safe bill ledger, physical kWh bounds & anomaly checks.</p>
-                        </div>
-                        <div className="p-3 rounded-lg border border-slate-800 bg-slate-950/40">
-                          <div className="font-semibold text-sky-400">3. Presentation & Mobile Snapshot</div>
-                          <p className={`mt-0.5 ${mutedText}`}>Interactive desktop analytics + dependency-gated GitHub Pages static JSON.</p>
+                          <div className="font-semibold text-emerald-400">2. NYSEG Hourly Usage CSV</div>
+                          <p className={`mt-1 font-mono text-[10px] break-all ${mutedText}`}>
+                            {TELEMETRY_META.nyseg_source_path}
+                          </p>
+                          <p className="mt-1 text-sky-400 font-medium">
+                            {TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly rows → {TELEMETRY_META.reconciled_days} daily summaries
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -548,7 +792,7 @@ export default function HeliosPulsePortal() {
                       onClick={() => setActiveTab('connectors')}
                       className="mt-4 w-full py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
                     >
-                      Configure Live Connectors <ChevronRight className="w-3.5 h-3.5" />
+                      Manage CSV Sources <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -627,18 +871,44 @@ export default function HeliosPulsePortal() {
           <div className={`rounded-xl border overflow-hidden ${cardBg}`}>
             <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="font-semibold text-sm">Reconciled Daily Telemetry & Meter Grid</h3>
-                <p className={`text-xs ${mutedText}`}>Click any row's Audit icon to inspect source IDs and net-metering math</p>
+                <h3 className="font-semibold text-sm">
+                  Reconciled Daily Telemetry & Meter Grid ({sortedSolarRows.length} rows shown)
+                </h3>
+                <p className={`text-xs ${mutedText}`}>
+                  Synced from Sunrun_Daily_Production_Data.csv & NYSEG_Daily_Usage_Data.csv • Click Audit icon for formula trace
+                </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Status Filter */}
                 <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
-                  {['weekly', 'monthly', 'yearly'].map((span) => (
+                  {[
+                    { id: 'all', label: 'All Rows' },
+                    { id: 'RECONCILED', label: `Reconciled (${TELEMETRY_META.reconciled_days})` },
+                    { id: 'SUNRUN_ONLY', label: `Sunrun Only (${TELEMETRY_META.sunrun_only_days})` },
+                  ].map((st) => (
                     <button
-                      key={span}
-                      onClick={() => setSpanFilter(span)}
-                      className={`px-2.5 py-1 capitalize ${spanFilter === span ? 'bg-amber-500 text-slate-950 font-semibold' : mutedText}`}
+                      key={st.id}
+                      onClick={() => setStatusFilter(st.id)}
+                      className={`px-2.5 py-1 ${statusFilter === st.id ? 'bg-indigo-600 text-white font-semibold' : mutedText}`}
                     >
-                      {span}
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Span Filter */}
+                <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs">
+                  {[
+                    { id: 'weekly', label: 'Weekly (7d)' },
+                    { id: 'monthly', label: 'Monthly (30d)' },
+                    { id: 'yearly', label: `All (${solarRows.length}d)` },
+                  ].map((span) => (
+                    <button
+                      key={span.id}
+                      onClick={() => setSpanFilter(span.id)}
+                      className={`px-2.5 py-1 ${spanFilter === span.id ? 'bg-amber-500 text-slate-950 font-semibold' : mutedText}`}
+                    >
+                      {span.label}
                     </button>
                   ))}
                 </div>
@@ -651,16 +921,18 @@ export default function HeliosPulsePortal() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[640px]">
               <table className="w-full text-left text-xs">
-                <thead className={darkMode ? 'bg-slate-950/60 text-slate-400' : 'bg-slate-100 text-slate-600'}>
+                <thead className={`sticky top-0 ${darkMode ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
                   <tr>
                     <th className="p-3 cursor-pointer" onClick={() => toggleSort('date')}>Date ↕</th>
                     <th className="p-3 cursor-pointer" onClick={() => toggleSort('solar_kwh')}>Solar (kWh) ↕</th>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('m01_import_kwh')}>M01 Import ↕</th>
-                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('m02_export_kwh')}>M02 Export ↕</th>
+                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('eod_meter_kwh')}>EOD Meter ↕</th>
+                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('m01_import_kwh')}>M01 Delivered ↕</th>
+                    <th className="p-3 cursor-pointer" onClick={() => toggleSort('m02_export_kwh')}>M02 Received ↕</th>
                     <th className="p-3 cursor-pointer" onClick={() => toggleSort('credit_delta')}>Net Bank Δ ↕</th>
-                    <th className="p-3">Weather</th>
+                    <th className="p-3">Weather / Irrad.</th>
+                    <th className="p-3">Status</th>
                     <th className="p-3">Notes</th>
                     <th className="p-3 text-right">Audit</th>
                   </tr>
@@ -669,13 +941,46 @@ export default function HeliosPulsePortal() {
                   {sortedSolarRows.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-800/30 transition">
                       <td className="p-3 font-mono font-medium">{row.date}</td>
-                      <td className="p-3 font-semibold text-amber-400">{row.solar_kwh.toFixed(1)}</td>
-                      <td className="p-3 text-rose-400">{row.m01_import_kwh.toFixed(1)}</td>
-                      <td className="p-3 text-emerald-400">{row.m02_export_kwh.toFixed(1)}</td>
-                      <td className={`p-3 font-semibold ${row.credit_delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {row.credit_delta >= 0 ? `+${row.credit_delta.toFixed(1)}` : row.credit_delta.toFixed(1)}
+                      <td className="p-3 font-semibold text-amber-400">{row.solar_kwh.toFixed(2)}</td>
+                      <td className={`p-3 font-mono ${mutedText}`}>{row.eod_meter_kwh ? row.eod_meter_kwh.toFixed(1) : '—'}</td>
+                      <td className="p-3 text-rose-400">
+                        {row.m01_import_kwh !== null ? row.m01_import_kwh.toFixed(2) : <span className={mutedText}>—</span>}
                       </td>
-                      <td className="p-3">{row.temp_f}°F • {row.irradiance}</td>
+                      <td className="p-3 text-emerald-400">
+                        {row.m02_export_kwh !== null ? row.m02_export_kwh.toFixed(2) : <span className={mutedText}>—</span>}
+                      </td>
+                      <td
+                        className={`p-3 font-semibold ${
+                          row.credit_delta === null
+                            ? mutedText
+                            : row.credit_delta >= 0
+                            ? 'text-emerald-400'
+                            : 'text-rose-400'
+                        }`}
+                      >
+                        {row.credit_delta === null
+                          ? '—'
+                          : row.credit_delta >= 0
+                          ? `+${row.credit_delta.toFixed(2)}`
+                          : row.credit_delta.toFixed(2)}
+                      </td>
+                      <td className="p-3">
+                        {row.temp_f !== null ? `${row.temp_f}°F • ` : ''}
+                        {row.irradiance}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                            row.status === 'RECONCILED'
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : row.status === 'SUNRUN_ONLY'
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : 'bg-slate-700/40 text-slate-400'
+                          }`}
+                        >
+                          {row.status}
+                        </span>
+                      </td>
                       <td className="p-3 max-w-xs">
                         {editingNoteId === row.id ? (
                           <div className="flex items-center gap-1">
@@ -698,7 +1003,7 @@ export default function HeliosPulsePortal() {
                           <span
                             onClick={() => {
                               setEditingNoteId(row.id);
-                              setNoteDraft(row.note);
+                              setNoteDraft(row.note || '');
                             }}
                             className={`cursor-pointer hover:underline ${row.note ? '' : mutedText}`}
                           >
@@ -723,81 +1028,99 @@ export default function HeliosPulsePortal() {
           </div>
         )}
 
-        {/* TAB 3: PROVIDER CONNECTORS & PAYLOAD INGESTION */}
+        {/* TAB 3: PROVIDER CONNECTORS & CSV INGESTION */}
         {activeTab === 'connectors' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className={`rounded-xl border p-5 space-y-4 ${cardBg}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  <h3 className="font-semibold text-sm">EnergyProviderConnector Bridge (Zero-Secret Frontend)</h3>
+                  <FolderOpen className="w-4 h-4 text-amber-400" />
+                  <h3 className="font-semibold text-sm">Configured Local CSV Data Sources</h3>
                 </div>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">OS Keyring Isolated</span>
+                <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  PII Sanitized
+                </span>
               </div>
               <p className={`text-xs ${mutedText}`}>
-                Provider passwords and OAuth refresh tokens remain strictly inside Windows Credential Manager on your local backend. Only sanitized daily telemetry crosses this bridge.
+                Build-time & dev-time sync (<code className="text-amber-400">npm run sync-data</code>) reads directly from your local Sunrun and NYSEG CSV files, aggregates hourly intervals into daily summaries, and strips PII before publishing.
               </p>
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="block font-medium mb-1">Local Python Coordinator Endpoint</label>
+                  <label className="block font-medium mb-1">Sunrun Daily Production CSV Path</label>
                   <input
-                    value={bridgeUrl}
-                    onChange={(e) => setBridgeUrl(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono"
+                    value={sunrunCsvPathInput}
+                    onChange={(e) => setSunrunCsvPathInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px]"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-medium mb-1">Sunrun Site ID</label>
-                    <input
-                      value={sunrunSiteId}
-                      onChange={(e) => setSunrunSiteId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono"
-                    />
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className={mutedText}>
+                      Loaded: {TELEMETRY_META.sunrun_total_rows} daily rows ({TELEMETRY_META.cumulative_solar_kwh.toLocaleString()} kWh)
+                    </span>
+                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 cursor-pointer font-semibold">
+                      <Upload className="w-3.5 h-3.5" /> Reload Sunrun CSV
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={(e) => handleCsvFileUpload(e, 'sunrun')}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
-                  <div>
-                    <label className="block font-medium mb-1">NYSEG Subscription ID</label>
-                    <input
-                      value={nysegAccountId}
-                      onChange={(e) => setNysegAccountId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono"
-                    />
+                </div>
+
+                <div className="pt-2 border-t border-slate-800">
+                  <label className="block font-medium mb-1">NYSEG Hourly Usage CSV Path</label>
+                  <input
+                    value={nysegCsvPathInput}
+                    onChange={(e) => setNysegCsvPathInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px]"
+                  />
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className={mutedText}>
+                      Loaded: {TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly rows ({TELEMETRY_META.reconciled_days} days)
+                    </span>
+                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 cursor-pointer font-semibold">
+                      <Upload className="w-3.5 h-3.5" /> Reload NYSEG CSV
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={(e) => handleCsvFileUpload(e, 'nyseg')}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-800">
-                <h4 className="text-xs font-semibold mb-2">Recent Connector Audit Trail</h4>
-                <div className="space-y-2">
-                  {syncLogs.map((log, i) => (
-                    <div key={i} className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800 text-[11px]">
-                      <div className="flex justify-between font-mono text-slate-400 mb-0.5">
-                        <span>{log.provider}</span>
-                        <span>{log.ts}</span>
-                      </div>
-                      <div className="text-emerald-400 font-medium">{log.msg}</div>
+              <div className="pt-3 border-t border-slate-800 space-y-2">
+                <div className="text-xs font-semibold">Recent Connector Ingestion Audit Logs</div>
+                {syncLogs.map((l, i) => (
+                  <div key={i} className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] font-mono">
+                    <div className="flex justify-between text-emerald-400">
+                      <span>[{l.provider}] {l.status}</span>
+                      <span className="text-slate-500">{l.ts}</span>
                     </div>
-                  ))}
-                </div>
+                    <div className="text-slate-300 mt-0.5">{l.msg}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* LIVE CONNECTOR PAYLOAD VALIDATOR */}
             <div className={`rounded-xl border p-5 space-y-4 ${cardBg}`}>
-              <div className="flex items-center gap-2">
-                <FileCode2 className="w-4 h-4 text-amber-400" />
-                <h3 className="font-semibold text-sm">Live Connector Payload Validator & Ingest</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm">Single-Day Telemetry Payload Tester</h3>
+                <span className="text-xs text-amber-400">Physical Bound Guard Active</span>
               </div>
               <p className={`text-xs ${mutedText}`}>
-                Test normalized JSON records from <code className="text-amber-400">SunrunConnector</code> or <code className="text-sky-400">NYSEGConnector</code> against physical kWh bounds before committing to the dashboard.
+                Test single-day JSON ingestion or try setting <code className="text-rose-400">m02_export_kwh</code> higher than <code className="text-amber-400">production_kwh</code> to trigger the reconciliation guard.
               </p>
 
               <textarea
-                rows={8}
+                rows={7}
                 value={rawPayloadInput}
                 onChange={(e) => setRawPayloadInput(e.target.value)}
-                className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs text-emerald-300"
+                className="w-full p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs"
               />
 
               {ingestBanner && (
@@ -827,7 +1150,7 @@ export default function HeliosPulsePortal() {
         {activeTab === 'billing' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className={`lg:col-span-2 rounded-xl border p-5 space-y-4 ${cardBg}`}>
-              <h3 className="font-semibold text-sm">NYSEG Statement Revision Ledger (Audit-Preserving)</h3>
+              <h3 className="font-semibold text-sm">Monthly Reconciled Sunrun + NYSEG Statement Ledger (From CSVs)</h3>
               <div className="space-y-4">
                 {NYSEG_BILL_REVISIONS.map((bill) => (
                   <div key={bill.revision_id} className="p-4 rounded-xl border border-slate-800 bg-slate-950/50 space-y-3">
@@ -841,15 +1164,16 @@ export default function HeliosPulsePortal() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                      <div><span className={`block ${mutedText}`}>M01 Billed</span><span className="font-semibold">{bill.m01_billed_kwh} kWh</span></div>
-                      <div><span className={`block ${mutedText}`}>M02 Exported</span><span className="font-semibold text-emerald-400">{bill.m02_exported_kwh} kWh</span></div>
-                      <div><span className={`block ${mutedText}`}>Ending Credit Bank</span><span className="font-semibold text-amber-400">{bill.ending_credit_bank} kWh</span></div>
-                      <div><span className={`block ${mutedText}`}>Amount Due</span><span className="font-bold text-base">${bill.total_due.toFixed(2)}</span></div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                      <div><span className={`block ${mutedText}`}>Solar Produced</span><span className="font-semibold text-amber-400">{bill.solar_produced_kwh} kWh</span></div>
+                      <div><span className={`block ${mutedText}`}>M01 Delivered</span><span className="font-semibold text-rose-400">{bill.m01_billed_kwh} kWh</span></div>
+                      <div><span className={`block ${mutedText}`}>M02 Received</span><span className="font-semibold text-emerald-400">{bill.m02_exported_kwh} kWh</span></div>
+                      <div><span className={`block ${mutedText}`}>Ending Credit Bank</span><span className="font-semibold text-sky-400">{bill.ending_credit_bank} kWh</span></div>
+                      <div><span className={`block ${mutedText}`}>Est. Monthly Due</span><span className="font-bold text-base">${bill.total_due.toFixed(2)}</span></div>
                     </div>
 
                     <div className={`text-[11px] pt-2 border-t border-slate-800/80 ${mutedText}`}>
-                      Audit Trace: {bill.audit_note}
+                      {bill.audit_note}
                     </div>
                   </div>
                 ))}
@@ -860,7 +1184,9 @@ export default function HeliosPulsePortal() {
             <div className={`rounded-xl border p-5 space-y-5 ${cardBg}`}>
               <div>
                 <h3 className="font-semibold text-sm">Net-Metering Credit Bank Forecaster</h3>
-                <p className={`text-xs ${mutedText}`}>Simulate winter DuctlessAire heat-pump draw & NYSEG tariff shifts</p>
+                <p className={`text-xs ${mutedText}`}>
+                  Starting from your real +{solarTotals.bankBalance} kWh NYSEG credit bank
+                </p>
               </div>
 
               <div className="space-y-4 text-xs">
@@ -936,21 +1262,42 @@ export default function HeliosPulsePortal() {
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className={`max-w-md w-full rounded-2xl border p-5 space-y-4 ${cardBg}`}>
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm">Record Audit & Formula Breakdown</h3>
+              <h3 className="font-bold text-sm">Record Audit & CSV Formula Breakdown</h3>
               <button onClick={() => setSelectedAuditRow(null)}><X className="w-4 h-4" /></button>
             </div>
             <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs space-y-1.5">
-              <div>Source Record ID: <span className="text-amber-400">{selectedAuditRow.id}</span></div>
+              <div>Record ID: <span className="text-amber-400">{selectedAuditRow.id}</span></div>
               <div>Date: {selectedAuditRow.date}</div>
-              <div>Sunrun Gross Production: {selectedAuditRow.solar_kwh} kWh</div>
-              <div>NYSEG M02 Grid Export: {selectedAuditRow.m02_export_kwh} kWh</div>
-              <div>NYSEG M01 Grid Import: {selectedAuditRow.m01_import_kwh} kWh</div>
-              <div className="pt-2 border-t border-slate-800 text-emerald-400">
-                Net Credit Bank Formula: ({selectedAuditRow.m02_export_kwh} - {selectedAuditRow.m01_import_kwh}) = {selectedAuditRow.credit_delta} kWh
+              <div>Sunrun Solar Produced: <span className="text-amber-400">{selectedAuditRow.solar_kwh} kWh</span></div>
+              <div>Sunrun EOD Meter Reading: {selectedAuditRow.eod_meter_kwh ?? 0} kWh</div>
+              <div>
+                NYSEG M02 Received (Export):{' '}
+                <span className="text-emerald-400">
+                  {selectedAuditRow.m02_export_kwh !== null ? `${selectedAuditRow.m02_export_kwh} kWh` : 'Pending CSV'}
+                </span>
               </div>
-              <div className="text-slate-400">
-                Physical Check: M02 ({selectedAuditRow.m02_export_kwh}) &le; Solar ({selectedAuditRow.solar_kwh}) + 0.5 kWh [PASS]
+              <div>
+                NYSEG M01 Delivered (Import):{' '}
+                <span className="text-rose-400">
+                  {selectedAuditRow.m01_import_kwh !== null ? `${selectedAuditRow.m01_import_kwh} kWh` : 'Pending CSV'}
+                </span>
               </div>
+              <div>NYSEG Hourly Intervals Summed: {selectedAuditRow.nyseg_hours || 0} hrs</div>
+              {selectedAuditRow.temp_f !== null && (
+                <div>
+                  NYSEG Hourly Temp: {selectedAuditRow.temp_f}°F avg ({selectedAuditRow.temp_min_f ?? selectedAuditRow.temp_f}°F–{selectedAuditRow.temp_max_f ?? selectedAuditRow.temp_f}°F)
+                </div>
+              )}
+              {selectedAuditRow.credit_delta !== null && (
+                <>
+                  <div className="pt-2 border-t border-slate-800 text-emerald-400">
+                    Net Credit Bank Formula: ({selectedAuditRow.m02_export_kwh} - {selectedAuditRow.m01_import_kwh}) = {selectedAuditRow.credit_delta} kWh
+                  </div>
+                  <div className="text-slate-400">
+                    Physical Check: M02 ({selectedAuditRow.m02_export_kwh}) &le; Solar ({selectedAuditRow.solar_kwh}) + 0.5 kWh [PASS]
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -966,17 +1313,17 @@ export default function HeliosPulsePortal() {
             </div>
             <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700">
               <div className="text-xs text-slate-400">NYSEG Net-Metering Credit Bank</div>
-              <div className="text-3xl font-bold text-emerald-400 mt-1">{solarTotals.bankBalance} kWh</div>
-              <div className="text-[11px] text-slate-400 mt-2">Zero PII • Sanitized JSON • {lastSyncTime}</div>
+              <div className="text-3xl font-bold text-emerald-400 mt-1">+{solarTotals.bankBalance} kWh</div>
+              <div className="text-[11px] text-slate-400 mt-2">Zero PII • Sanitized CSV Snapshot • {lastSyncTime}</div>
             </div>
             <div className="grid grid-cols-2 gap-2.5 text-xs">
               <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                <div className="text-slate-400">7d Solar</div>
-                <div className="font-bold text-amber-400 text-base">{solarTotals.prod} kWh</div>
+                <div className="text-slate-400">Cumulative Solar</div>
+                <div className="font-bold text-amber-400 text-base">{Number(solarTotals.cumSolar).toLocaleString()} kWh</div>
               </div>
               <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                <div className="text-slate-400">Latest Bill</div>
-                <div className="font-bold text-base">$23.29</div>
+                <div className="text-slate-400">Reconciled Days</div>
+                <div className="font-bold text-base">{solarTotals.reconciledCount} Days</div>
               </div>
             </div>
           </div>
@@ -990,7 +1337,7 @@ export default function HeliosPulsePortal() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-indigo-400" />
-                <h3 className="font-bold text-sm">Grounded Resource Analyst</h3>
+                <h3 className="font-bold text-sm">Grounded CSV Telemetry Analyst</h3>
               </div>
               <button onClick={() => setShowAiDrawer(false)}><X className="w-4 h-4" /></button>
             </div>
@@ -1012,7 +1359,7 @@ export default function HeliosPulsePortal() {
 
             <div className="space-y-2 pt-3 border-t border-slate-800">
               <div className="flex flex-wrap gap-1.5">
-                {['How is my NYSEG credit bank?', 'Explain latest NYSEG bill'].map((preset) => (
+                {['How is my NYSEG credit bank?', 'Explain monthly CSV totals'].map((preset) => (
                   <button
                     key={preset}
                     onClick={() => handleAskAi(preset)}
@@ -1027,7 +1374,7 @@ export default function HeliosPulsePortal() {
                   value={aiQuery}
                   onChange={(e) => setAiQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAskAi()}
-                  placeholder="Ask about your meters, bills, or forecasts..."
+                  placeholder="Ask about your CSV meters, bills, or credit bank..."
                   className="flex-1 px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"
                 />
                 <button

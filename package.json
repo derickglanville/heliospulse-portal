@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "sync-data": "node scripts/sync-csv-data.mjs",
+    "dev": "node scripts/sync-csv-data.mjs && vite",
+    "build": "node scripts/sync-csv-data.mjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
