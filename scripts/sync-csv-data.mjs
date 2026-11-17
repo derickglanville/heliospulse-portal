@@ -57,6 +57,10 @@ for (const line of nyLines) {
   const date = (parts[5] || '').trim();
   if (!date) continue;
 
+  const startTime = (parts[6] || '').trim();
+  const hourMatch = startTime.match(/\s(\d{2}):/);
+  const hour = hourMatch ? Number(hourMatch[1]) : 0;
+
   const net = Number(parts[8] || 0);
   const weatherRaw = (parts[11] || '').trim();
   const weather = weatherRaw !== '' ? Number(weatherRaw) : null;
@@ -70,6 +74,7 @@ for (const line of nyLines) {
       net: 0,
       temps: [],
       hours: 0,
+      hourly: Array.from({ length: 24 }, (_, h) => ({ h, m01: 0, m02: 0, temp: null })),
     });
   }
   const entry = nyMap.get(date);
@@ -79,6 +84,13 @@ for (const line of nyLines) {
   if (weather !== null && !Number.isNaN(weather)) {
     entry.temps.push(weather);
   }
+  if (hour >= 0 && hour < 24) {
+    entry.hourly[hour].m01 = Number((entry.hourly[hour].m01 + delivered).toFixed(3));
+    entry.hourly[hour].m02 = Number((entry.hourly[hour].m02 + received).toFixed(3));
+    if (weather !== null && !Number.isNaN(weather)) {
+      entry.hourly[hour].temp = weather;
+    }
+  }
   entry.hours += 1;
   nysegTotalHours += 1;
 }
@@ -86,7 +98,6 @@ for (const line of nyLines) {
 function classifyIrradiance(solarKwh, dateStr) {
   if (solarKwh <= 0) return 'Pending';
   const month = Number(dateStr.slice(5, 7));
-  // Seasonal clear-sky reference threshold (summer vs autumn/winter)
   const clearThreshold = month <= 8 ? 65 : month === 9 ? 50 : month === 10 ? 32 : 25;
   const partlyThreshold = clearThreshold * 0.65;
   const variableThreshold = clearThreshold * 0.35;
@@ -155,6 +166,7 @@ const dailyRows = allDates.map((date, idx) => {
     irradiance: classifyIrradiance(solar_kwh, date),
     status,
     note,
+    hourly: hasNyseg ? ny.hourly.map((h) => [h.m01, h.m02]) : null,
   };
 });
 
@@ -202,8 +214,10 @@ const monthlySummaries = [...monthlyMap.values()]
 
 const reconciledRows = dailyRows.filter((r) => r.status === 'RECONCILED');
 const totalSolarKwh = Number(dailyRows.reduce((acc, r) => acc + r.solar_kwh, 0).toFixed(3));
+const reconciledSolarKwh = Number(reconciledRows.reduce((acc, r) => acc + r.solar_kwh, 0).toFixed(3));
 const totalM01ImportKwh = Number(reconciledRows.reduce((acc, r) => acc + (r.m01_import_kwh || 0), 0).toFixed(3));
 const totalM02ExportKwh = Number(reconciledRows.reduce((acc, r) => acc + (r.m02_export_kwh || 0), 0).toFixed(3));
+const totalEdcConsumedKwh = Number((reconciledSolarKwh + totalM01ImportKwh - totalM02ExportKwh).toFixed(3));
 const netCreditBankKwh = Number((totalM02ExportKwh - totalM01ImportKwh).toFixed(3));
 
 const payload = {
@@ -219,15 +233,17 @@ const payload = {
     pending_days: dailyRows.filter((r) => r.status === 'PENDING_TELEMETRY').length,
     date_range_start: allDates[0],
     date_range_end: allDates[allDates.length - 1],
+    reconciled_range_start: reconciledRows[0]?.date || null,
     latest_reconciled_date: reconciledRows[reconciledRows.length - 1]?.date || null,
     latest_sunrun_date: [...dailyRows].reverse().find((r) => r.solar_kwh > 0)?.date || null,
     cumulative_solar_kwh: totalSolarKwh,
+    reconciled_solar_kwh: reconciledSolarKwh,
     cumulative_m01_import_kwh: totalM01ImportKwh,
     cumulative_m02_export_kwh: totalM02ExportKwh,
+    reconciled_edc_consumed_kwh: totalEdcConsumedKwh,
     cumulative_net_credit_bank_kwh: netCreditBankKwh,
   },
   monthly_summaries: monthlySummaries,
-  // Store newest-first by default for table display
   daily_rows: [...dailyRows].reverse(),
 };
 

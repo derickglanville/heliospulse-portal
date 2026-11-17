@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Sun, Zap, Droplet, Flame, Car, Activity, ShieldCheck, RefreshCw,
   FileText, AlertTriangle, CheckCircle2,
   Download, Eye, Layers, Smartphone, Moon, SunMedium,
   Lock, Database, Calculator, X,
-  Check, Clock, Sparkles, Plug, FolderOpen, Upload
+  Check, Clock, Sparkles, Plug, FolderOpen, Upload,
+  ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home
 } from 'lucide-react';
 import telemetryData from './data/telemetryData.json';
 
@@ -94,6 +95,7 @@ const SYNC_STEPS = [
 ];
 
 const TOP_MENU_ITEMS = [
+  { id: 'distribution', label: 'Energy Distribution' },
   { id: 'savings', label: 'Solar savings' },
   { id: 'flow', label: 'Energy flow' },
   { id: 'monthly', label: 'Production by month' },
@@ -103,10 +105,26 @@ const TOP_MENU_ITEMS = [
   { id: 'system', label: 'Your system' },
 ];
 
+// Compute solar peak elevation & estimated daily peak irradiance (W/m²) for Yorktown Heights, NY (41.3°N)
+function getSolarAstronomyForDate(dateStr, solarKwh) {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 0));
+  const dayOfYear = Math.floor((d - start) / (1000 * 60 * 60 * 24));
+  // Solar declination angle (degrees)
+  const declination = 23.45 * Math.sin(((2 * Math.PI) / 365) * (dayOfYear - 81));
+  const latitude = 41.27;
+  const peakElevation = Math.max(15, 90 - latitude + declination);
+  // Peak irradiance estimate scaled from daily kWh
+  const peakIrradiance = Math.round(Math.min(1020, Math.max(95, solarKwh * 21.8)));
+  return {
+    sunHeight: `+${peakElevation.toFixed(1)}°`,
+    irradianceWm2: `${peakIrradiance} W/m²`,
+  };
+}
+
 export default function HeliosPulsePortal() {
-  // Default to the warm editorial light theme shown in the reference design
   const [darkMode, setDarkMode] = useState(false);
-  const [activeTab, setActiveTab] = useState('savings');
+  const [activeTab, setActiveTab] = useState('distribution');
   const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
@@ -116,6 +134,65 @@ export default function HeliosPulsePortal() {
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [selectedAuditRow, setSelectedAuditRow] = useState(null);
+
+  // Reconciled dates sorted chronological (oldest -> newest) for the Energy Distribution date picker & player
+  const reconciledRowsChrono = useMemo(() => {
+    return [...solarRows]
+      .filter((r) => r.status === 'RECONCILED')
+      .sort((a, b) => (a.date > b.date ? 1 : -1));
+  }, [solarRows]);
+
+  const [selectedDistDate, setSelectedDistDate] = useState(
+    TELEMETRY_META.latest_reconciled_date || '2026-11-14'
+  );
+  const [isPlayingDates, setIsPlayingDates] = useState(false);
+
+  useEffect(() => {
+    if (!isPlayingDates || reconciledRowsChrono.length === 0) return undefined;
+    const timer = setInterval(() => {
+      setSelectedDistDate((prev) => {
+        const idx = reconciledRowsChrono.findIndex((r) => r.date === prev);
+        const nextIdx = idx < 0 || idx >= reconciledRowsChrono.length - 1 ? 0 : idx + 1;
+        return reconciledRowsChrono[nextIdx].date;
+      });
+    }, 650);
+    return () => clearInterval(timer);
+  }, [isPlayingDates, reconciledRowsChrono]);
+
+  const selectedDistRow = useMemo(() => {
+    return (
+      reconciledRowsChrono.find((r) => r.date === selectedDistDate) ||
+      reconciledRowsChrono[reconciledRowsChrono.length - 1]
+    );
+  }, [reconciledRowsChrono, selectedDistDate]);
+
+  // Compute 24-hour energy balance bars for the selected date in Energy Distribution
+  const hourlyBalanceData = useMemo(() => {
+    if (!selectedDistRow) return [];
+    const totalSolar = selectedDistRow.solar_kwh || 0;
+    const rawHourly =
+      selectedDistRow.hourly || Array.from({ length: 24 }, () => [0, 0]);
+
+    // Bell-curve daylight weights (6am to 5pm) plus actual M02 export signal so solar >= M02 every hour
+    const rawWeights = rawHourly.map(([m01, m02], h) => {
+      if (h < 6 || h > 17) return m02 > 0 ? m02 : 0;
+      const bell = Math.max(0, Math.sin(((h - 6) / 11) * Math.PI));
+      return bell * 1.2 + m02 * 0.85;
+    });
+    const weightSum = rawWeights.reduce((a, b) => a + b, 0) || 1;
+
+    return rawHourly.map(([m01, m02], h) => {
+      const estSolar = Number(((totalSolar * rawWeights[h]) / weightSum).toFixed(2));
+      const estConsumed = Number(Math.max(0.05, estSolar + m01 - m02).toFixed(2));
+      return {
+        hour: h,
+        solar: estSolar,
+        m01: Number(m01.toFixed(2)),
+        consumed: estConsumed,
+        m02: Number(m02.toFixed(2)),
+      };
+    });
+  }, [selectedDistRow]);
 
   // Sync Pipeline State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -153,7 +230,6 @@ export default function HeliosPulsePortal() {
   const [ingestBanner, setIngestBanner] = useState(null);
 
   // Modals & Drawers
-  const [showMobilePreview, setShowMobilePreview] = useState(false);
   const [showAiDrawer, setShowAiDrawer] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [aiMessages, setAiMessages] = useState([
@@ -167,7 +243,7 @@ export default function HeliosPulsePortal() {
   const [winterUsageGrowth, setWinterUsageGrowth] = useState(10);
   const [utilityRateEscalation, setUtilityRateEscalation] = useState(4.5);
 
-  // Seasonal Comparison Analysis (Summer Aug 1 - Sep 15 vs Autumn Oct 1 - Nov 14) computed from real CSV rows
+  // Seasonal Comparison Analysis (Summer Aug 1 - Sep 15 vs Autumn Oct 1 - Nov 14)
   const seasonalComparison = useMemo(() => {
     const reconciled = solarRows.filter((r) => r.status === 'RECONCILED');
     const summerRows = reconciled.filter((r) => r.date >= '2026-08-01' && r.date <= '2026-09-15');
@@ -175,7 +251,6 @@ export default function HeliosPulsePortal() {
 
     const avg = (arr, fn) => (arr.length ? arr.reduce((a, r) => a + fn(r), 0) / arr.length : 0);
 
-    // Home consumption = Solar Produced - NYSEG Received (Export) + NYSEG Delivered (Import)
     const summerSolar = avg(summerRows, (r) => r.solar_kwh || 0);
     const autumnSolar = avg(autumnRows, (r) => r.solar_kwh || 0);
 
@@ -211,32 +286,24 @@ export default function HeliosPulsePortal() {
       metrics: [
         {
           title: 'Total home consumption (Sunrun + NYSEG)',
-          beforeLabel: 'Aug 1 – Sep 15',
-          afterLabel: 'Oct 1 – Nov 14',
           beforeVal: summerHomeLoad,
           afterVal: autumnHomeLoad,
           pct: pctDiff(summerHomeLoad, autumnHomeLoad),
         },
         {
           title: 'Solar produced (Sunrun array)',
-          beforeLabel: 'Aug 1 – Sep 15',
-          afterLabel: 'Oct 1 – Nov 14',
           beforeVal: summerSolar,
           afterVal: autumnSolar,
           pct: pctDiff(summerSolar, autumnSolar),
         },
         {
           title: 'Sent to grid (NYSEG M02 Received)',
-          beforeLabel: 'Aug 1 – Sep 15',
-          afterLabel: 'Oct 1 – Nov 14',
           beforeVal: summerReceived,
           afterVal: autumnReceived,
           pct: pctDiff(summerReceived, autumnReceived),
         },
         {
           title: 'Delivered by NYSEG (M01 Import)',
-          beforeLabel: 'Aug 1 – Sep 15',
-          afterLabel: 'Oct 1 – Nov 14',
           beforeVal: summerDelivered,
           afterVal: autumnDelivered,
           pct: pctDiff(summerDelivered, autumnDelivered),
@@ -264,8 +331,10 @@ export default function HeliosPulsePortal() {
   const solarTotals = useMemo(() => {
     const allReconciled = solarRows.filter((r) => r.status === 'RECONCILED');
     const cumSolar = solarRows.reduce((acc, r) => acc + (r.solar_kwh || 0), 0);
+    const reconciledSolar = allReconciled.reduce((acc, r) => acc + (r.solar_kwh || 0), 0);
     const cumImp = allReconciled.reduce((acc, r) => acc + (r.m01_import_kwh || 0), 0);
     const cumExp = allReconciled.reduce((acc, r) => acc + (r.m02_export_kwh || 0), 0);
+    const cumEdcConsumed = reconciledSolar + cumImp - cumExp;
     const cumBank = cumExp - cumImp;
 
     const spanProd = spanFilteredRows.reduce((acc, r) => acc + (r.solar_kwh || 0), 0);
@@ -277,8 +346,10 @@ export default function HeliosPulsePortal() {
 
     return {
       cumSolar: cumSolar.toFixed(1),
+      reconciledSolar: reconciledSolar.toFixed(1),
       cumImp: cumImp.toFixed(1),
       cumExp: cumExp.toFixed(1),
+      cumEdcConsumed: cumEdcConsumed.toFixed(1),
       bankBalance: cumBank.toFixed(1),
       maxEodMeter: maxEodMeter.toFixed(1),
       prod: spanProd.toFixed(1),
@@ -523,9 +594,9 @@ export default function HeliosPulsePortal() {
     if (!q) return;
     let reply = '';
     if (q.toLowerCase().includes('credit') || q.toLowerCase().includes('bank')) {
-      reply = `Across all ${solarTotals.reconciledCount} reconciled NYSEG days (${TELEMETRY_META.date_range_start} to ${TELEMETRY_META.latest_reconciled_date}), NYSEG Received (M02 Export) totaled ${solarTotals.cumExp} kWh and NYSEG Delivered (M01 Import) totaled ${solarTotals.cumImp} kWh, resulting in a cumulative Net-Metering Credit Bank of +${solarTotals.bankBalance} kWh.`;
+      reply = `Across all ${solarTotals.reconciledCount} reconciled NYSEG days (${TELEMETRY_META.reconciled_range_start} to ${TELEMETRY_META.latest_reconciled_date}), NYSEG Received (M02 Export) totaled ${solarTotals.cumExp} kWh and NYSEG Delivered (M01 Import) totaled ${solarTotals.cumImp} kWh, resulting in a cumulative Net-Metering Credit Bank of +${solarTotals.bankBalance} kWh.`;
     } else if (q.toLowerCase().includes('bill') || q.toLowerCase().includes('nyseg') || q.toLowerCase().includes('month')) {
-      reply = `Monthly net bank additions from your CSVs: Aug 2026 (+853.60 kWh), Sep 2026 (+580.01 kWh), Oct 2026 (+227.42 kWh), and Nov 2026 MTD (-130.18 kWh seasonal drawdown). Note that Oct 29–30 and Nov 13 & 15 have Sunrun generation logged (${TELEMETRY_META.sunrun_only_days} Sunrun-only days total) awaiting NYSEG interval export.`;
+      reply = `Monthly net bank additions from your CSVs: Aug 2026 (+853.60 kWh), Sep 2026 (+580.01 kWh), Oct 2026 (+227.42 kWh), and Nov 2026 MTD (-130.19 kWh seasonal drawdown).`;
     } else {
       reply = `Your Sunrun array has produced ${solarTotals.cumSolar} kWh cumulatively across ${solarTotals.totalDays} CSV days (End-of-Day Meter Reading: ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}).`;
     }
@@ -542,7 +613,58 @@ export default function HeliosPulsePortal() {
     }
   };
 
-  // Warm editorial theme styling matching the reference screenshot
+  const stepDistDate = (dir) => {
+    if (!reconciledRowsChrono.length) return;
+    const idx = reconciledRowsChrono.findIndex((r) => r.date === selectedDistDate);
+    if (idx === -1) return;
+    const nextIdx = Math.max(0, Math.min(reconciledRowsChrono.length - 1, idx + dir));
+    setSelectedDistDate(reconciledRowsChrono[nextIdx].date);
+  };
+
+  // Computed metrics for the selected day in the Energy Distribution tab
+  const distDayMetrics = useMemo(() => {
+    const r = selectedDistRow || {
+      date: '2026-11-14',
+      solar_kwh: 16.917,
+      m01_import_kwh: 24.61,
+      m02_export_kwh: 5.684,
+      temp_f: 39,
+      temp_min_f: 35,
+      temp_max_f: 43,
+      irradiance: 'Overcast',
+    };
+    const m01 = r.m01_import_kwh || 0;
+    const solar = r.solar_kwh || 0;
+    const m02 = r.m02_export_kwh || 0;
+    const homeConsumed = Math.max(0.1, solar + m01 - m02);
+    const solarRetained = Math.max(0, solar - m02);
+    const gridDepPct = Math.min(100, Math.max(0, Math.round((m01 / homeConsumed) * 100)));
+    const solarCovPct = 100 - gridDepPct;
+    const netGridFlow = m01 - m02;
+    const co2AvoidedLb = (solar * 0.857).toFixed(1);
+    const astro = getSolarAstronomyForDate(r.date, solar);
+
+    return {
+      date: r.date,
+      m01: m01.toFixed(1),
+      solar: solar.toFixed(1),
+      m02: m02.toFixed(1),
+      homeConsumed: homeConsumed.toFixed(1),
+      solarRetained: solarRetained.toFixed(1),
+      gridDepPct,
+      solarCovPct,
+      netGridFlowAbs: Math.abs(netGridFlow).toFixed(1),
+      netGridImported: netGridFlow >= 0,
+      co2AvoidedLb,
+      irradianceLabel: r.irradiance || 'Overcast',
+      tempMax: r.temp_max_f ?? r.temp_f ?? 43,
+      tempMin: r.temp_min_f ?? r.temp_f ?? 35,
+      irradianceWm2: astro.irradianceWm2,
+      sunHeight: astro.sunHeight,
+    };
+  }, [selectedDistRow]);
+
+  // Warm editorial theme styling
   const pageBg = darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#f6f4ef] text-[#1a1917]';
   const cardBg = darkMode
     ? 'bg-slate-900 border-slate-800 text-slate-100'
@@ -556,9 +678,9 @@ export default function HeliosPulsePortal() {
 
   return (
     <div className={`min-h-screen transition-colors duration-200 font-sans ${pageBg}`}>
-      {/* TOP MENU BAR WITH PILL BUTTONS (MATCHING REFERENCE SCREENSHOT) */}
+      {/* TOP MENU BAR WITH PILL BUTTONS */}
       <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
-        <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-4 pb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3.5 pb-3 flex flex-wrap items-center justify-between gap-3">
           {/* PILL NAVIGATION MENU BUTTONS */}
           <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {TOP_MENU_ITEMS.map((item) => {
@@ -625,11 +747,537 @@ export default function HeliosPulsePortal() {
         </div>
       </header>
 
-      {/* MAIN EDITORIAL CONTENT CONTAINER */}
-      <main className="max-w-5xl mx-auto px-5 sm:px-8 py-8 space-y-8">
-        {/* VIEW 1: SOLAR SAVINGS (SEASONAL HORIZONTAL BAR COMPARISON MATCHING SCREENSHOT) */}
+      {/* MAIN CONTENT CONTAINER */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8">
+        {/* TAB 0: ENERGY DISTRIBUTION (3-COLUMN VIEW MATCHING SCREENSHOT) */}
+        {activeTab === 'distribution' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+            {/* COLUMN 1: DAILY ENERGY FLOW — WHERE ENERGY MOVED */}
+            <div className={`rounded-2xl border overflow-hidden flex flex-col justify-between ${
+              darkMode ? 'bg-slate-900 border-slate-800' : 'bg-[#f4fbf7] border-[#d8ece2] shadow-xs'
+            }`}>
+              <div className="p-5 pb-3">
+                {/* Header & Date Picker */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      DAILY ENERGY FLOW
+                    </div>
+                    <h2 className={`text-xl font-bold tracking-tight mt-0.5 ${darkMode ? 'text-white' : 'text-[#1e293b]'}`}>
+                      Where energy moved
+                    </h2>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Showing {distDayMetrics.date}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => stepDistDate(-1)}
+                      className={`w-7 h-7 rounded-full border flex items-center justify-center transition cursor-pointer ${
+                        darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
+                      }`}
+                      title="Previous day"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <select
+                      value={selectedDistDate}
+                      onChange={(e) => setSelectedDistDate(e.target.value)}
+                      className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer ${
+                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-[#1e293b]'
+                      }`}
+                    >
+                      {[...reconciledRowsChrono].reverse().map((r) => (
+                        <option key={r.date} value={r.date}>
+                          {r.date}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => stepDistDate(1)}
+                      className={`w-7 h-7 rounded-full border flex items-center justify-center transition cursor-pointer ${
+                        darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
+                      }`}
+                      title="Next day"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Circular Flow Diagram */}
+                <div className="relative h-[300px] w-full mt-2 select-none">
+                  {/* Connecting SVG Curves & Arrows */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 340 300">
+                    <defs>
+                      <marker id="arrow-grey" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                        <path d="M0,0 L8,4 L0,8 Z" fill="#64748b" />
+                      </marker>
+                      <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                        <path d="M0,0 L8,4 L0,8 Z" fill="#0284c7" />
+                      </marker>
+                    </defs>
+                    {/* Left M01 circle to Center Home circle */}
+                    <path
+                      d="M 82 95 Q 92 140 122 152"
+                      fill="none"
+                      stroke="#64748b"
+                      strokeWidth="2.2"
+                      markerEnd="url(#arrow-grey)"
+                    />
+                    {/* Right Solar circle to Center Home circle */}
+                    <path
+                      d="M 258 95 Q 248 140 218 152"
+                      fill="none"
+                      stroke="#0284c7"
+                      strokeWidth="2.2"
+                      markerEnd="url(#arrow-blue)"
+                    />
+                    {/* Center Home circle to Bottom M02 Export circle */}
+                    <line
+                      x1="170"
+                      y1="202"
+                      x2="170"
+                      y2="220"
+                      stroke="#64748b"
+                      strokeWidth="2.2"
+                    />
+                  </svg>
+
+                  {/* Top-Left Node: M01 Imported from NYSEG */}
+                  <div
+                    className={`absolute left-4 top-2 w-24 h-24 rounded-full border-2 border-[#22c55e] flex flex-col items-center justify-center text-center shadow-xs ${
+                      darkMode ? 'bg-emerald-950/60 text-emerald-100' : 'bg-[#dcfce7] text-[#14532d]'
+                    }`}
+                  >
+                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-600 text-[10px] font-serif italic flex items-center justify-center shadow-2xs">
+                      i
+                    </span>
+                    <ArrowDown className="w-3.5 h-3.5 text-[#16a34a] mb-0.5" />
+                    <div className="text-base font-extrabold leading-none">{distDayMetrics.m01}</div>
+                    <div className="text-[9px] leading-tight mt-0.5 px-1 opacity-85">
+                      kWh imported<br />M01 from NYSEG
+                    </div>
+                  </div>
+
+                  {/* Top-Right Node: Produced SunRun Solar */}
+                  <div
+                    className={`absolute right-4 top-2 w-24 h-24 rounded-full border-2 border-[#0ea5e9] flex flex-col items-center justify-center text-center shadow-xs ${
+                      darkMode ? 'bg-sky-950/60 text-sky-100' : 'bg-white text-[#0f172a]'
+                    }`}
+                  >
+                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-600 text-[10px] font-serif italic flex items-center justify-center shadow-2xs">
+                      i
+                    </span>
+                    <Sun className="w-3.5 h-3.5 text-[#0284c7] mb-0.5" />
+                    <div className="text-base font-extrabold leading-none">{distDayMetrics.solar}</div>
+                    <div className="text-[9px] leading-tight mt-0.5 px-1 opacity-80">
+                      kWh produced<br />SunRun solar
+                    </div>
+                  </div>
+
+                  {/* Center Node: Estimated Home Consumed */}
+                  <div
+                    className={`absolute left-1/2 -translate-x-1/2 top-[102px] w-26 h-26 rounded-full border-2 border-[#f97316] flex flex-col items-center justify-center text-center shadow-xs ${
+                      darkMode ? 'bg-slate-950 text-amber-100' : 'bg-white text-[#1e293b]'
+                    }`}
+                  >
+                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-600 text-[10px] font-serif italic flex items-center justify-center shadow-2xs">
+                      i
+                    </span>
+                    <Home className="w-3.5 h-3.5 text-[#f97316] mb-0.5" />
+                    <div className="text-lg font-extrabold leading-none">{distDayMetrics.homeConsumed}</div>
+                    <div className="text-[9px] leading-tight mt-0.5 px-1.5 opacity-80">
+                      kWh estimated<br />home consumed
+                    </div>
+                  </div>
+
+                  {/* Bottom Node: M02 Exported to NYSEG */}
+                  <div
+                    className={`absolute left-1/2 -translate-x-1/2 bottom-0 w-22 h-22 rounded-full border-2 border-[#ef4444] flex flex-col items-center justify-center text-center shadow-xs ${
+                      darkMode ? 'bg-rose-950/60 text-rose-100' : 'bg-[#ffe4e6] text-[#881337]'
+                    }`}
+                  >
+                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-600 text-[10px] font-serif italic flex items-center justify-center shadow-2xs">
+                      i
+                    </span>
+                    <ArrowUp className="w-3.5 h-3.5 text-[#e11d48] mb-0.5" />
+                    <div className="text-sm font-extrabold leading-none">{distDayMetrics.m02}</div>
+                    <div className="text-[9px] leading-tight mt-0.5 px-1 opacity-85">
+                      kWh exported<br />M02 to NYSEG
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Performance Sub-Panel */}
+              <div className={`p-5 border-t space-y-3 ${
+                darkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-[#f6f5fb] border-[#e5e4f0]'
+              }`}>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  PERFORMANCE
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-1">
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-slate-500">Grid dependence</div>
+                    <div className="text-lg font-extrabold text-[#0369a1]">{distDayMetrics.gridDepPct}%</div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                      <div style={{ width: `${distDayMetrics.gridDepPct}%` }} className="h-full bg-[#06b6d4] rounded-full" />
+                    </div>
+                    <div className="text-[11px] text-slate-500 pt-0.5">Home demand supplied by NYSEG.</div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-slate-500">Solar coverage</div>
+                    <div className="text-lg font-extrabold text-[#0369a1]">{distDayMetrics.solarCovPct}%</div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                      <div style={{ width: `${distDayMetrics.solarCovPct}%` }} className="h-full bg-[#f59e0b] rounded-full" />
+                    </div>
+                    <div className="text-[11px] text-slate-500 pt-0.5">Solar retained for home use.</div>
+                  </div>
+                </div>
+
+                <div className={`grid grid-cols-2 gap-4 pt-3 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200/80'}`}>
+                  <div>
+                    <div className="text-xs font-semibold text-slate-500">Net grid flow</div>
+                    <div className="text-base font-extrabold text-[#0369a1] mt-0.5">
+                      {distDayMetrics.netGridFlowAbs} kWh {distDayMetrics.netGridImported ? 'imported' : 'exported'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {distDayMetrics.netGridImported ? 'Positive means imported from NYSEG.' : 'Net export credited to NYSEG bank.'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-semibold text-slate-500">Solar impact</div>
+                    <div className="text-base font-extrabold text-[#0369a1] mt-0.5">{distDayMetrics.co2AvoidedLb} lb</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Estimated CO₂ avoided.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMN 2: HOURLY ENERGY BALANCE — PRODUCTION, CONSUMPTION, AND GRID FLOW */}
+            <div className={`rounded-2xl border p-5 flex flex-col justify-between ${cardBg}`}>
+              <div className="space-y-4">
+                {/* Header & Play Controls */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      HOURLY ENERGY BALANCE
+                    </div>
+                    <h2 className="text-xl font-bold tracking-tight mt-0.5 leading-snug">
+                      Production, consumption, and grid flow
+                    </h2>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => setIsPlayingDates(!isPlayingDates)}
+                      className={`px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                        isPlayingDates
+                          ? 'bg-amber-500 text-slate-950 border-amber-500'
+                          : darkMode
+                          ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                          : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isPlayingDates ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
+                      <span>{isPlayingDates ? 'Pause' : 'Play dates'}</span>
+                    </button>
+                    <div className={`w-14 h-14 rounded-full border flex flex-col items-center justify-center text-center text-[10px] font-semibold leading-tight ${
+                      darkMode ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-700 bg-slate-50/60'
+                    }`}>
+                      Selected<br />day
+                    </div>
+                  </div>
+                </div>
+
+                {/* Weather / Irradiance / Sun Height Strip */}
+                <div className={`grid grid-cols-3 gap-2 py-3 border-y ${dividerBorder}`}>
+                  <div className={`pr-2 border-r ${dividerBorder}`}>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">WEATHER</div>
+                    <div className="text-sm font-extrabold mt-0.5">{distDayMetrics.irradianceLabel}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {distDayMetrics.tempMax}° / {distDayMetrics.tempMin}°F
+                    </div>
+                  </div>
+
+                  <div className={`px-2 border-r ${dividerBorder}`}>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">IRRADIANCE</div>
+                    <div className="text-sm font-extrabold mt-0.5">{distDayMetrics.irradianceWm2}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Daily peak</div>
+                  </div>
+
+                  <div className="pl-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">SUN HEIGHT</div>
+                    <div className="text-sm font-extrabold mt-0.5">{distDayMetrics.sunHeight}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Peak elevation</div>
+                  </div>
+                </div>
+
+                {/* Note + Day Dropdown */}
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    NYSEG M01/M02 bars are measured. SunRun production and home use are apportioned from daily totals for this visual.
+                  </p>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="font-semibold text-slate-600">Day</span>
+                    <select
+                      value={selectedDistDate}
+                      onChange={(e) => setSelectedDistDate(e.target.value)}
+                      className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer ${
+                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
+                    >
+                      {[...reconciledRowsChrono].reverse().map((r) => (
+                        <option key={r.date} value={r.date}>
+                          {r.date}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div className="space-y-1.5 text-xs pl-6 pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#06b6d4] inline-block" />
+                    <span className={mutedText}>SunRun produced · estimate</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#52606d] inline-block" />
+                    <span className={mutedText}>M01 imported</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#ea580c] inline-block" />
+                    <span className={mutedText}>Estimated consumed</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#9aa5b1] inline-block" />
+                    <span className={mutedText}>M02 exported</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Diverging 24-Hour Bar Chart */}
+              <div className="pt-4 pb-2">
+                <div className="relative h-56 flex">
+                  {/* Y-axis labels */}
+                  <div className="w-6 flex flex-col justify-between text-[11px] text-slate-500 text-right pr-1.5 py-1">
+                    <span>5</span>
+                    <span>0</span>
+                    <span>-5</span>
+                  </div>
+
+                  {/* Plot area */}
+                  <div className="flex-1 relative flex flex-col">
+                    {/* Grid lines */}
+                    <div className={`absolute inset-x-0 top-2 border-t ${dividerBorder}`} />
+                    <div className="absolute inset-x-0 top-1/2 border-t border-slate-400 z-10" />
+                    <div className={`absolute inset-x-0 bottom-2 border-t ${dividerBorder}`} />
+
+                    {/* 24 Hour Columns */}
+                    <div className="flex-1 grid grid-cols-24 gap-[2px] items-center px-1">
+                      {hourlyBalanceData.map((d) => {
+                        const maxAxis = 5.5;
+                        const solarPct = Math.min(100, (d.solar / maxAxis) * 100);
+                        const m01Pct = Math.min(100 - solarPct, (d.m01 / maxAxis) * 100);
+
+                        const consPct = Math.min(100, (d.consumed / maxAxis) * 100);
+                        const m02Pct = Math.min(100 - consPct, (d.m02 / maxAxis) * 100);
+
+                        return (
+                          <div
+                            key={d.hour}
+                            className="h-full flex flex-col group"
+                            title={`${d.hour}:00 • Solar: ${d.solar} kWh | M01 Imp: ${d.m01} kWh | Consumed: ${d.consumed} kWh | M02 Exp: ${d.m02} kWh`}
+                          >
+                            {/* Positive Half (Supply: Solar on bottom, M01 on top) */}
+                            <div className="h-1/2 flex flex-col justify-end">
+                              {m01Pct > 0 && (
+                                <div style={{ height: `${m01Pct}%` }} className="w-full bg-[#52606d]" />
+                              )}
+                              {solarPct > 0 && (
+                                <div style={{ height: `${solarPct}%` }} className="w-full bg-[#06b6d4]" />
+                              )}
+                            </div>
+
+                            {/* Negative Half (Demand/Export: Consumed near 0, M02 below) */}
+                            <div className="h-1/2 flex flex-col justify-start">
+                              {consPct > 0 && (
+                                <div style={{ height: `${consPct}%` }} className="w-full bg-[#ea580c]" />
+                              )}
+                              {m02Pct > 0 && (
+                                <div style={{ height: `${m02Pct}%` }} className="w-full bg-[#9aa5b1]" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* X-axis hour labels */}
+                <div className="pl-6 grid grid-cols-8 text-[11px] text-slate-500 pt-1">
+                  <span>12a</span>
+                  <span>3a</span>
+                  <span>6a</span>
+                  <span>9a</span>
+                  <span>12p</span>
+                  <span>3p</span>
+                  <span>6p</span>
+                  <span>9p</span>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMN 3: LIFETIME ENERGY — TOTAL ENERGY */}
+            <div className={`rounded-2xl border p-5 flex flex-col justify-between ${cardBg}`}>
+              <div className="space-y-3.5">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      LIFETIME ENERGY
+                    </div>
+                    <h2 className="text-xl font-bold tracking-tight mt-0.5">
+                      Total Energy
+                    </h2>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {TELEMETRY_META.reconciled_range_start} to {TELEMETRY_META.latest_reconciled_date}
+                  </span>
+                </div>
+
+                {/* 2x2 KPI Cards */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className={`p-3 rounded-xl border ${darkMode ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-white'}`}>
+                    <div className="text-[11px] font-semibold text-slate-500">↓ Imported / M01</div>
+                    <div className="text-base font-extrabold text-[#0f172a] dark:text-white mt-1">
+                      {Number(solarTotals.cumImp).toLocaleString()} kWh
+                    </div>
+                  </div>
+
+                  <div className={`p-3 rounded-xl border ${darkMode ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-white'}`}>
+                    <div className="text-[11px] font-semibold text-slate-500">☀ Produced / SunRun</div>
+                    <div className="text-base font-extrabold text-[#0f172a] dark:text-white mt-1">
+                      {Number(solarTotals.reconciledSolar).toLocaleString()} kWh
+                    </div>
+                  </div>
+
+                  <div className={`p-3 rounded-xl border border-l-4 border-l-[#f97316] ${darkMode ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-white'}`}>
+                    <div className="text-[11px] font-semibold text-slate-500">⌂ Consumed / EDC</div>
+                    <div className="text-base font-extrabold text-[#0f172a] dark:text-white mt-1">
+                      {Number(solarTotals.cumEdcConsumed).toLocaleString()} kWh
+                    </div>
+                  </div>
+
+                  <div className={`p-3 rounded-xl border ${darkMode ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-white'}`}>
+                    <div className="text-[11px] font-semibold text-slate-500">↑ Exported / M02</div>
+                    <div className="text-base font-extrabold text-[#0f172a] dark:text-white mt-1">
+                      {Number(solarTotals.cumExp).toLocaleString()} kWh
+                    </div>
+                  </div>
+                </div>
+
+                {/* Net Exported Green Pill Banner */}
+                <div className="py-2 px-3 rounded-xl bg-[#dcfce7] text-[#166534] text-center text-xs font-extrabold">
+                  Net exported: {Number(solarTotals.bankBalance).toLocaleString()} kWh
+                </div>
+
+                {/* Grid dependence & Solar coverage box */}
+                <div className={`p-3.5 rounded-xl border space-y-2.5 ${darkMode ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50/50'}`}>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs font-bold">
+                      <span className="text-slate-600 dark:text-slate-300">Grid dependence</span>
+                      <span className="text-[#0369a1]">58%</span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                      <div style={{ width: '58%' }} className="h-full bg-[#06b6d4] rounded-full" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs font-bold">
+                      <span className="text-slate-600 dark:text-slate-300">Solar coverage</span>
+                      <span className="text-[#0369a1]">42%</span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                      <div style={{ width: '42%' }} className="h-full bg-[#f59e0b] rounded-full" />
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 pt-0.5">
+                    🌱 3,966 lb estimated CO₂ avoided
+                  </div>
+                </div>
+
+                {/* Legend for Lifetime Stacked Bar */}
+                <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 text-xs pt-1 px-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#06b6d4] inline-block" />
+                    <span className={mutedText}>SunRun produced</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#ea580c] inline-block" />
+                    <span className={mutedText}>EDC consumed</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#52606d] inline-block" />
+                    <span className={mutedText}>M01 imported</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-xs bg-[#9aa5b1] inline-block" />
+                    <span className={mutedText}>M02 exported</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Diverging Lifetime Stacked Bar (2026) */}
+              <div className="pt-3 pb-1">
+                <div className="relative h-44 flex">
+                  {/* Y-axis */}
+                  <div className="w-10 flex flex-col justify-between text-[11px] text-slate-500 text-right pr-2 py-2">
+                    <span>5000</span>
+                    <span>0</span>
+                    <span>-5000</span>
+                  </div>
+
+                  {/* Bar Plot */}
+                  <div className="flex-1 relative flex flex-col justify-center items-center">
+                    <div className={`absolute inset-x-0 top-3 border-t ${dividerBorder}`} />
+                    <div className="absolute inset-x-0 top-1/2 border-t border-slate-500 z-10" />
+                    <div className={`absolute inset-x-0 bottom-3 border-t ${dividerBorder}`} />
+
+                    <div className="w-3/5 h-full flex flex-col">
+                      {/* Positive Half: 4,638.4 Solar + 1,781.6 M01 = 6,420 */}
+                      <div className="h-1/2 flex flex-col justify-end">
+                        <div style={{ height: '24%' }} className="w-full bg-[#52606d]" title="M01 Imported: 1,781.6 kWh" />
+                        <div style={{ height: '64%' }} className="w-full bg-[#06b6d4]" title="SunRun Produced: 4,638.4 kWh" />
+                      </div>
+                      {/* Negative Half: 3,076.5 Consumed + 3,343.6 M02 = 6,420 */}
+                      <div className="h-1/2 flex flex-col justify-start">
+                        <div style={{ height: '42%' }} className="w-full bg-[#ea580c]" title="EDC Consumed: 3,076.5 kWh" />
+                        <div style={{ height: '46%' }} className="w-full bg-[#9aa5b1]" title="M02 Exported: 3,343.6 kWh" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="pl-10 text-center text-xs font-semibold text-slate-600 pt-1">
+                  2026
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 1: SOLAR SAVINGS (SEASONAL HORIZONTAL BAR COMPARISON) */}
         {activeTab === 'savings' && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-5xl mx-auto">
             <div className="space-y-2.5 max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 How did cooler autumn weather shift your solar balance?
@@ -639,7 +1287,6 @@ export default function HeliosPulsePortal() {
               </p>
             </div>
 
-            {/* HORIZONTAL BAR COMPARISON CARD (EXACT VISUAL MATCH TO SCREENSHOT) */}
             <div className={`rounded-2xl border p-6 sm:p-7 space-y-6 ${cardBg}`}>
               <div className={`text-xs sm:text-[13px] ${mutedText}`}>
                 Daily averages, kWh per day. <strong className={darkMode ? 'text-slate-200' : 'text-[#1a1917]'}>Late Summer</strong> = Aug 1 – Sep 15 ({seasonalComparison.summerDays} days) • <strong className={darkMode ? 'text-slate-200' : 'text-[#1a1917]'}>Autumn</strong> = Oct 1 – Nov 14 ({seasonalComparison.autumnDays} reconciled days).
@@ -659,7 +1306,6 @@ export default function HeliosPulsePortal() {
                         </span>
                       </div>
 
-                      {/* BEFORE BAR */}
                       <div className="grid grid-cols-[88px_1fr_92px] sm:grid-cols-[105px_1fr_105px] items-center gap-3 text-xs">
                         <span className={`text-right ${mutedText}`}>Late Summer</span>
                         <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
@@ -671,7 +1317,6 @@ export default function HeliosPulsePortal() {
                         <span className="font-mono font-medium text-right">{m.beforeVal.toFixed(1)} kWh/day</span>
                       </div>
 
-                      {/* AFTER BAR */}
                       <div className="grid grid-cols-[88px_1fr_92px] sm:grid-cols-[105px_1fr_105px] items-center gap-3 text-xs">
                         <span className={`text-right ${mutedText}`}>Autumn</span>
                         <div className={`w-full h-3.5 rounded-full overflow-hidden ${trackBg}`}>
@@ -688,7 +1333,6 @@ export default function HeliosPulsePortal() {
               </div>
             </div>
 
-            {/* BOTTOM CALLOUT CARDS (TEMPERATURE & CREDIT BANK HIGHLIGHTS MATCHING SCREENSHOT) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className={`rounded-xl p-5 space-y-1.5 ${calloutBg}`}>
                 <div className="text-2xl sm:text-3xl font-bold tracking-tight">{seasonalComparison.summerTemp}°F</div>
@@ -709,7 +1353,7 @@ export default function HeliosPulsePortal() {
 
         {/* VIEW 2: ENERGY FLOW (CUMULATIVE SUMMARY + DAILY BAR CHART) */}
         {activeTab === 'flow' && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-5xl mx-auto">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="space-y-2 max-w-2xl">
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
@@ -743,7 +1387,6 @@ export default function HeliosPulsePortal() {
               </div>
             </div>
 
-            {/* 4 SUMMARY METRIC CALLOUTS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className={`rounded-xl p-5 space-y-1 ${calloutBg}`}>
                 <div className={`text-xs font-medium ${mutedText}`}>Sunrun Produced ({spanFilter === 'yearly' ? 'All-time' : spanFilter})</div>
@@ -770,7 +1413,6 @@ export default function HeliosPulsePortal() {
               </div>
             </div>
 
-            {/* DAILY INTERVAL BAR CHART */}
             <div className={`rounded-2xl border p-6 space-y-4 ${cardBg}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -825,9 +1467,9 @@ export default function HeliosPulsePortal() {
           </div>
         )}
 
-        {/* VIEW 3: PRODUCTION BY MONTH (HORIZONTAL BARS BY MONTH + STATEMENT LEDGER) */}
+        {/* VIEW 3: PRODUCTION BY MONTH */}
         {activeTab === 'monthly' && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-5xl mx-auto">
             <div className="space-y-2 max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 Production & grid exchange by month
@@ -892,7 +1534,7 @@ export default function HeliosPulsePortal() {
 
         {/* VIEW 4: NYSEG RECORD (DAILY LEDGER & AUDIT TABLE) */}
         {activeTab === 'nyseg' && (
-          <div className="space-y-5">
+          <div className="space-y-5 max-w-5xl mx-auto">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="space-y-1.5">
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
@@ -1070,7 +1712,7 @@ export default function HeliosPulsePortal() {
 
         {/* VIEW 5: CREDIT FORECASTER & MONTHLY BILLING LEDGER */}
         {activeTab === 'estimator' && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-5xl mx-auto">
             <div className="space-y-2 max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 Winter credit bank & statement estimator
@@ -1112,7 +1754,6 @@ export default function HeliosPulsePortal() {
                 </div>
               </div>
 
-              {/* WHAT-IF SCENARIO SIMULATOR */}
               <div className={`rounded-2xl border p-6 space-y-5 h-fit ${cardBg}`}>
                 <div>
                   <h3 className="font-semibold text-sm">Winter Drawdown Simulator</h3>
@@ -1169,7 +1810,7 @@ export default function HeliosPulsePortal() {
 
         {/* VIEW 6: CSV CONNECTORS & 6-STAGE PIPELINE */}
         {activeTab === 'connectors' && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-5xl mx-auto">
             <div className="space-y-2 max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 Local CSV connectors & ingestion pipeline
@@ -1295,7 +1936,7 @@ export default function HeliosPulsePortal() {
 
         {/* VIEW 7: YOUR SYSTEM (ASSET & CIRCUIT CATALOG) */}
         {activeTab === 'system' && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-w-5xl mx-auto">
             <div className="space-y-2 max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 Your solar & utility system profile
