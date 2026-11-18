@@ -536,6 +536,12 @@ function HeliosPulsePortalInner() {
       text: `Connected to your real CSV & NYSEG statement dataset: 2,210.0 kWh official NYSEG credit balance (2026-11-05 statement), -135.0 kWh unbilled net flow through 2026-11-14, and 2,075.0 kWh forecast opening balance for December 2026.`,
     },
   ]);
+  const aiMessagesEndRef = useRef(null);
+  useEffect(() => {
+    if (showAiDrawer) {
+      aiMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [aiMessages, showAiDrawer]);
 
   // Seasonal Comparison Analysis (Summer Aug 1 - Sep 15 vs Autumn Oct 1 - Nov 14)
   const seasonalComparison = useMemo(() => {
@@ -3515,22 +3521,49 @@ function HeliosPulsePortalInner() {
                 <Sparkles className="w-4 h-4 text-[#e07a16]" />
                 <h3 className="font-bold text-sm">Grounded CSV Telemetry Analyst</h3>
               </div>
-              <button onClick={() => setShowAiDrawer(false)} className="cursor-pointer"><X className="w-4 h-4" /></button>
+              <div className="flex items-center gap-2">
+                {aiMessages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiMessages([]);
+                      setAiQuery('');
+                    }}
+                    className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold transition cursor-pointer ${pillBtnSecondary}`}
+                    title="Clear all AI questions and answers"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button onClick={() => setShowAiDrawer(false)} className="cursor-pointer" aria-label="Close AI drawer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto py-4 space-y-3 text-xs">
-              {aiMessages.map((m, idx) => (
-                <div
-                  key={idx}
-                  className={`p-3.5 rounded-xl ${
-                    m.role === 'user'
-                      ? 'bg-[#1a1917] text-white ml-8'
-                      : `${calloutBg} mr-6 leading-relaxed`
-                  }`}
-                >
-                  {m.text}
+              {aiMessages.length === 0 ? (
+                <div className={`p-4 rounded-xl text-center space-y-1 ${calloutBg}`}>
+                  <div className="font-semibold">Conversation cleared</div>
+                  <div className={mutedText}>
+                    Select a question below or type your own to query your solar &amp; NYSEG dataset.
+                  </div>
                 </div>
-              ))}
+              ) : (
+                aiMessages.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3.5 rounded-xl ${
+                      m.role === 'user'
+                        ? 'bg-[#1a1917] text-white ml-8'
+                        : `${calloutBg} mr-6 leading-relaxed`
+                    }`}
+                  >
+                    {m.text}
+                  </div>
+                ))
+              )}
+              <div ref={aiMessagesEndRef} />
             </div>
 
             <div className={`space-y-2 pt-3 border-t ${dividerBorder}`}>
