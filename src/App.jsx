@@ -11,6 +11,7 @@ import telemetryData from './data/telemetryData.json';
 import solarHomeSideImg from './assets/solar-home-side.png';
 import solarFarmSideImg from './assets/solar-farm-side.png';
 import EnergyCostChartsTab from './components/EnergyCostChartsTab.jsx';
+import NysegMonthlyBillsTab from './components/NysegMonthlyBillsTab.jsx';
 
 const INITIAL_SOLAR_DAILY = telemetryData.daily_rows;
 const TELEMETRY_META = telemetryData.metadata;
@@ -64,6 +65,7 @@ const SYNC_STEPS = [
 const TOP_MENU_ITEMS = [
   { id: 'distribution', label: 'Energy Distribution' },
   { id: 'charts', label: 'Comparison & Cost' },
+  { id: 'bills', label: 'NYSEG Monthly Bills' },
   { id: 'datagrid', label: 'Interval Data Grid' },
   { id: 'estimator', label: 'Credit forecaster' },
   { id: 'monthly', label: 'Production by month' },
@@ -129,6 +131,8 @@ export default function HeliosPulsePortal() {
   const [sortAsc, setSortAsc] = useState(false);
 
   const [solarRows, setSolarRows] = useState(INITIAL_SOLAR_DAILY);
+  const [moreBillsData, setMoreBillsData] = useState(telemetryData.more_bills);
+  const [lastFolderEvent, setLastFolderEvent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [selectedAuditRow, setSelectedAuditRow] = useState(null);
@@ -575,6 +579,12 @@ export default function HeliosPulsePortal() {
             setSelectedDistDate(fresh.metadata.latest_reconciled_date);
           }
         }
+        if (fresh.more_bills) {
+          setMoreBillsData(fresh.more_bills);
+          setLastFolderEvent(
+            `Scanned More Bills folder at ${new Date().toLocaleTimeString()} — ${fresh.more_bills.total_pdf_files} PDF bills analyzed.`
+          );
+        }
       }
     } catch {
       // Static GitHub Pages environment uses build-time telemetryData.json
@@ -603,8 +613,23 @@ export default function HeliosPulsePortal() {
     }, 350);
   };
 
-  // Automatic daily 7:30 AM local sync timer + initial local check
+  // Automatic daily 7:30 AM local sync timer + live Vite HMR folder watch listener
   useEffect(() => {
+    if (import.meta.hot) {
+      const handler = (fresh) => {
+        if (Array.isArray(fresh?.daily_rows)) {
+          setSolarRows(fresh.daily_rows);
+        }
+        if (fresh?.more_bills) {
+          setMoreBillsData(fresh.more_bills);
+          setLastFolderEvent(
+            `Detected new/updated bill in More Bills folder at ${new Date().toLocaleTimeString()} — ${fresh.more_bills.total_pdf_files} PDF bills analyzed.`
+          );
+        }
+      };
+      import.meta.hot.on('nyseg-bills-updated', handler);
+    }
+
     const computeMsUntilNext730AM = () => {
       const now = new Date();
       const next = new Date(now);
@@ -2048,6 +2073,24 @@ export default function HeliosPulsePortal() {
             dividerBorder={dividerBorder}
             pillBtnSecondary={pillBtnSecondary}
             pageBg={pageBg}
+          />
+        )}
+
+        {/* TAB: NYSEG MONTHLY BILLS */}
+        {activeTab === 'bills' && (
+          <NysegMonthlyBillsTab
+            moreBillsData={moreBillsData}
+            onRescanBills={triggerSyncPipeline}
+            isSyncing={isSyncing}
+            lastFolderEvent={lastFolderEvent}
+            darkMode={darkMode}
+            cardBg={cardBg}
+            calloutBg={calloutBg}
+            subPanelBg={subPanelBg}
+            mutedText={mutedText}
+            trackBg={trackBg}
+            dividerBorder={dividerBorder}
+            pillBtnSecondary={pillBtnSecondary}
           />
         )}
 

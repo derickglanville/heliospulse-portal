@@ -75,6 +75,21 @@ if (fs.existsSync(path.join(CODEX_ROOT, 'solar_tracker', 'monthly_bill.py'))) {
   }
 }
 
+// Parse all PDFs from NYSEG Bill\Bills\More Bills
+let moreBillsReport = null;
+const parseBillsScript = path.join(__dirname, 'parse_nyseg_bills.py');
+if (fs.existsSync(parseBillsScript)) {
+  try {
+    const billsOut = execFileSync('python', [parseBillsScript], {
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    moreBillsReport = JSON.parse(billsOut.trim());
+  } catch (err) {
+    console.warn('[sync-csv-data] Warning: Could not run parse_nyseg_bills.py:', err.message);
+  }
+}
+
 const srLines = fs
   .readFileSync(sunrunCsvPath, 'utf8')
   .trim()
@@ -319,6 +334,7 @@ const payload = {
   },
   monthly_summaries: monthlySummaries,
   credit_bank_forecast: billSummaryReport?.credit_bank_forecast || null,
+  more_bills: moreBillsReport,
   bill_summary: billSummaryReport
     ? {
         file_count: billSummaryReport.file_count,
