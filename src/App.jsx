@@ -981,6 +981,7 @@ export default function HeliosPulsePortal() {
       solarCovPct,
       netGridFlowAbs: Math.abs(netGridFlow).toFixed(1),
       netGridImported: netGridFlow >= 0,
+      isM02GreaterThanM01: m02 > m01,
       co2AvoidedLb,
       irradianceLabel: astro.weatherCond || 'Overcast',
       tempMax: r.temp_max_f ?? r.temp_f ?? 43,
@@ -1783,46 +1784,134 @@ export default function HeliosPulsePortal() {
                       />
                     </svg>
 
-                    {/* Top-Left Node: M01 Imported */}
+                    {/* Top-Left Node: M01 Imported (Yellow when M02 > M01, Green otherwise) */}
                     <div
-                      className={`absolute left-4 top-2 w-24 h-24 rounded-full border-2 border-[#687076] flex flex-col items-center justify-center text-center shadow-2xs ${calloutBg}`}
+                      className={`absolute left-4 top-2 w-24 h-24 rounded-full border-2 flex flex-col items-center justify-center text-center shadow-2xs transition-colors ${
+                        distDayMetrics.isM02GreaterThanM01
+                          ? darkMode
+                            ? 'bg-amber-900/75 border-amber-400 text-amber-50'
+                            : 'bg-[#fef08a] border-[#ca8a04] text-[#1a1917]'
+                          : darkMode
+                          ? 'bg-emerald-900/75 border-emerald-400 text-emerald-50'
+                          : 'bg-[#bbf7d0] border-[#15803d] text-[#1a1917]'
+                      }`}
                     >
-                      <ArrowDown className="w-3.5 h-3.5 text-[#687076] mb-0.5" />
+                      <ArrowDown
+                        className={`w-3.5 h-3.5 mb-0.5 ${
+                          distDayMetrics.isM02GreaterThanM01
+                            ? darkMode
+                              ? 'text-amber-200'
+                              : 'text-[#854d0e]'
+                            : darkMode
+                            ? 'text-emerald-200'
+                            : 'text-[#15803d]'
+                        }`}
+                      />
                       <div className="text-base font-mono font-bold leading-none">{distDayMetrics.m01}</div>
-                      <div className={`text-[9px] leading-tight mt-0.5 px-1 ${mutedText}`}>
+                      <div
+                        className={`text-[9px] leading-tight mt-0.5 px-1 ${
+                          distDayMetrics.isM02GreaterThanM01
+                            ? darkMode
+                              ? 'text-amber-100/90'
+                              : 'text-[#451a03]'
+                            : darkMode
+                            ? 'text-emerald-100/90'
+                            : 'text-[#14532d]'
+                        }`}
+                      >
                         kWh imported<br />M01 from NYSEG
                       </div>
                     </div>
 
-                    {/* Top-Right Node: Produced SunRun Solar */}
+                    {/* Top-Right Node: Produced SunRun Solar (Light Red) */}
                     <div
-                      className={`absolute right-4 top-2 w-24 h-24 rounded-full border-2 border-[#e07a16] flex flex-col items-center justify-center text-center shadow-2xs ${cardBg}`}
+                      className={`absolute right-4 top-2 w-24 h-24 rounded-full border-2 flex flex-col items-center justify-center text-center shadow-2xs ${
+                        darkMode
+                          ? 'bg-rose-950/80 border-rose-400 text-rose-50'
+                          : 'bg-[#fee2e2] border-[#dc2626] text-[#1a1917]'
+                      }`}
                     >
-                      <Sun className="w-3.5 h-3.5 text-[#e07a16] mb-0.5" />
-                      <div className="text-base font-mono font-bold leading-none text-[#e07a16]">{distDayMetrics.solar}</div>
-                      <div className={`text-[9px] leading-tight mt-0.5 px-1 ${mutedText}`}>
+                      <Sun className={`w-3.5 h-3.5 mb-0.5 ${darkMode ? 'text-rose-200' : 'text-[#dc2626]'}`} />
+                      <div
+                        className={`text-base font-mono font-bold leading-none ${
+                          darkMode ? 'text-rose-100' : 'text-[#991b1b]'
+                        }`}
+                      >
+                        {distDayMetrics.solar}
+                      </div>
+                      <div className={`text-[9px] leading-tight mt-0.5 px-1 ${darkMode ? 'text-rose-100/90' : 'text-[#7f1d1d]'}`}>
                         kWh produced<br />SunRun solar
                       </div>
                     </div>
 
-                    {/* Center Node: Estimated Home Consumed */}
+                    {/* Center Node: Estimated Home Consumed (Light Blue) */}
                     <div
-                      className={`absolute left-1/2 -translate-x-1/2 top-[102px] w-26 h-26 rounded-full border-2 border-[#1a1917] dark:border-amber-400 flex flex-col items-center justify-center text-center shadow-2xs ${cardBg}`}
+                      className={`absolute left-1/2 -translate-x-1/2 top-[102px] w-26 h-26 rounded-full border-2 flex flex-col items-center justify-center text-center shadow-2xs ${
+                        darkMode
+                          ? 'bg-sky-950/85 border-sky-400 text-sky-50'
+                          : 'bg-[#dbeafe] border-[#2563eb] text-[#1a1917]'
+                      }`}
                     >
-                      <Home className="w-3.5 h-3.5 text-[#e07a16] mb-0.5" />
-                      <div className="text-lg font-mono font-bold leading-none">{distDayMetrics.homeConsumed}</div>
-                      <div className={`text-[9px] leading-tight mt-0.5 px-1.5 ${mutedText}`}>
+                      <Home className={`w-3.5 h-3.5 mb-0.5 ${darkMode ? 'text-sky-200' : 'text-[#2563eb]'}`} />
+                      <div
+                        className={`text-lg font-mono font-bold leading-none ${
+                          darkMode ? 'text-sky-100' : 'text-[#1e3a8a]'
+                        }`}
+                      >
+                        {distDayMetrics.homeConsumed}
+                      </div>
+                      <div className={`text-[9px] leading-tight mt-0.5 px-1.5 ${darkMode ? 'text-sky-100/90' : 'text-[#1e40af]'}`}>
                         kWh estimated<br />home consumed
                       </div>
                     </div>
 
-                    {/* Bottom Node: M02 Exported */}
+                    {/* Bottom Node: M02 Exported (Green when M02 > M01, Yellow otherwise) */}
                     <div
-                      className={`absolute left-1/2 -translate-x-1/2 bottom-0 w-22 h-22 rounded-full border-2 border-[#1f7a4c] flex flex-col items-center justify-center text-center shadow-2xs ${calloutBg}`}
+                      className={`absolute left-1/2 -translate-x-1/2 bottom-0 w-22 h-22 rounded-full border-2 flex flex-col items-center justify-center text-center shadow-2xs transition-colors ${
+                        distDayMetrics.isM02GreaterThanM01
+                          ? darkMode
+                            ? 'bg-emerald-900/75 border-emerald-400 text-emerald-50'
+                            : 'bg-[#bbf7d0] border-[#15803d] text-[#1a1917]'
+                          : darkMode
+                          ? 'bg-amber-900/75 border-amber-400 text-amber-50'
+                          : 'bg-[#fef08a] border-[#ca8a04] text-[#1a1917]'
+                      }`}
                     >
-                      <ArrowUp className="w-3.5 h-3.5 text-[#1f7a4c] mb-0.5" />
-                      <div className="text-sm font-mono font-bold leading-none text-[#1f7a4c]">{distDayMetrics.m02}</div>
-                      <div className={`text-[9px] leading-tight mt-0.5 px-1 ${mutedText}`}>
+                      <ArrowUp
+                        className={`w-3.5 h-3.5 mb-0.5 ${
+                          distDayMetrics.isM02GreaterThanM01
+                            ? darkMode
+                              ? 'text-emerald-200'
+                              : 'text-[#15803d]'
+                            : darkMode
+                            ? 'text-amber-200'
+                            : 'text-[#854d0e]'
+                        }`}
+                      />
+                      <div
+                        className={`text-sm font-mono font-bold leading-none ${
+                          distDayMetrics.isM02GreaterThanM01
+                            ? darkMode
+                              ? 'text-emerald-100'
+                              : 'text-[#14532d]'
+                            : darkMode
+                            ? 'text-amber-100'
+                            : 'text-[#854d0e]'
+                        }`}
+                      >
+                        {distDayMetrics.m02}
+                      </div>
+                      <div
+                        className={`text-[9px] leading-tight mt-0.5 px-1 ${
+                          distDayMetrics.isM02GreaterThanM01
+                            ? darkMode
+                              ? 'text-emerald-100/90'
+                              : 'text-[#14532d]'
+                            : darkMode
+                            ? 'text-amber-100/90'
+                            : 'text-[#451a03]'
+                        }`}
+                      >
                         kWh exported<br />M02 to NYSEG
                       </div>
                     </div>
