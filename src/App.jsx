@@ -10,6 +10,7 @@ import {
 import telemetryData from './data/telemetryData.json';
 import solarHomeSideImg from './assets/solar-home-side.png';
 import solarFarmSideImg from './assets/solar-farm-side.png';
+import EnergyCostChartsTab from './components/EnergyCostChartsTab.jsx';
 
 const INITIAL_SOLAR_DAILY = telemetryData.daily_rows;
 const TELEMETRY_META = telemetryData.metadata;
@@ -62,6 +63,7 @@ const SYNC_STEPS = [
 
 const TOP_MENU_ITEMS = [
   { id: 'distribution', label: 'Energy Distribution' },
+  { id: 'charts', label: 'Comparison & Cost' },
   { id: 'datagrid', label: 'Interval Data Grid' },
   { id: 'estimator', label: 'Credit forecaster' },
   { id: 'monthly', label: 'Production by month' },
@@ -2032,6 +2034,21 @@ export default function HeliosPulsePortal() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB: COMPARISON & COST (3 INTERACTIVE CHARTS) */}
+        {activeTab === 'charts' && (
+          <EnergyCostChartsTab
+            reconciledRowsChrono={reconciledRowsChrono}
+            darkMode={darkMode}
+            cardBg={cardBg}
+            calloutBg={calloutBg}
+            subPanelBg={subPanelBg}
+            mutedText={mutedText}
+            dividerBorder={dividerBorder}
+            pillBtnSecondary={pillBtnSecondary}
+            pageBg={pageBg}
+          />
         )}
 
         {/* TAB 2: INTERVAL DATA GRID */}
