@@ -693,6 +693,8 @@ function HeliosPulsePortalInner() {
 
     return {
       cumSolar: cumSolar.toFixed(1),
+      cumSolarExact: cumSolar.toFixed(3),
+      cumSolarMwh: (cumSolar / 1000).toFixed(3),
       reconciledSolar: reconciledSolar.toFixed(1),
       cumImp: cumImp.toFixed(1),
       cumExp: cumExp.toFixed(1),
@@ -2612,9 +2614,14 @@ function HeliosPulsePortalInner() {
                         Total Energy
                       </h2>
                     </div>
-                    <span className={`text-xs font-mono ${mutedText}`}>
-                      {TELEMETRY_META.reconciled_range_start} to {TELEMETRY_META.latest_reconciled_date}
-                    </span>
+                    <div className="text-right">
+                      <div className={`text-[11px] font-mono ${mutedText}`}>
+                        SunRun: {TELEMETRY_META.date_range_start} to {TELEMETRY_META.latest_sunrun_date}
+                      </div>
+                      <div className={`text-[10px] font-mono ${mutedText}`}>
+                        NYSEG: {TELEMETRY_META.reconciled_range_start} to {TELEMETRY_META.latest_reconciled_date}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
@@ -2628,7 +2635,14 @@ function HeliosPulsePortalInner() {
                     <div className={`p-3 rounded-xl ${calloutBg}`}>
                       <div className={`text-[11px] font-medium ${mutedText}`}>☀ Produced / SunRun</div>
                       <div className="text-base font-mono font-bold text-[#e07a16] mt-1">
-                        {Number(solarTotals.reconciledSolar).toLocaleString()} kWh
+                        {Number(solarTotals.cumSolarExact).toLocaleString('en-US', {
+                          minimumFractionDigits: 3,
+                          maximumFractionDigits: 3,
+                        })}{' '}
+                        kWh
+                      </div>
+                      <div className={`text-[11px] font-mono font-semibold mt-0.5 ${mutedText}`}>
+                        {solarTotals.cumSolarMwh} MWh · SunRun file to date
                       </div>
                     </div>
 
@@ -2712,12 +2726,12 @@ function HeliosPulsePortalInner() {
 
                       <div className="w-3/5 h-full flex flex-col">
                         <div className="h-1/2 flex flex-col justify-end">
-                          <div style={{ height: '24%' }} className="w-full bg-[#687076]" title="M01 Imported: 1,781.6 kWh" />
-                          <div style={{ height: '64%' }} className="w-full bg-[#e07a16]" title="SunRun Produced: 4,638.4 kWh" />
+                          <div style={{ height: '24%' }} className="w-full bg-[#687076]" title={`M01 Imported: ${Number(solarTotals.cumImp).toLocaleString()} kWh`} />
+                          <div style={{ height: '64%' }} className="w-full bg-[#e07a16]" title={`SunRun Produced: ${Number(solarTotals.cumSolarExact).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kWh (${solarTotals.cumSolarMwh} MWh)`} />
                         </div>
                         <div className="h-1/2 flex flex-col justify-start">
-                          <div style={{ height: '42%' }} className="w-full bg-[#b45309]" title="EDC Consumed: 3,076.5 kWh" />
-                          <div style={{ height: '46%' }} className="w-full bg-[#1f7a4c]" title="M02 Exported: 3,343.6 kWh" />
+                          <div style={{ height: '42%' }} className="w-full bg-[#b45309]" title={`EDC Consumed: ${Number(solarTotals.cumEdcConsumed).toLocaleString()} kWh`} />
+                          <div style={{ height: '46%' }} className="w-full bg-[#1f7a4c]" title={`M02 Exported: ${Number(solarTotals.cumExp).toLocaleString()} kWh`} />
                         </div>
                       </div>
                     </div>
@@ -3092,8 +3106,14 @@ function HeliosPulsePortalInner() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className={`rounded-xl p-5 space-y-1 ${calloutBg}`}>
                 <div className={`text-xs font-medium ${mutedText}`}>Sunrun Produced ({spanFilter === 'yearly' ? 'All-time' : spanFilter})</div>
-                <div className="text-2xl font-bold font-mono">{Number(solarTotals.prod).toLocaleString()} kWh</div>
-                <div className="text-xs text-[#1f7a4c] font-mono font-medium">EOD Meter: {Number(solarTotals.maxEodMeter).toLocaleString()} kWh</div>
+                <div className="text-2xl font-bold font-mono">
+                  {spanFilter === 'yearly'
+                    ? `${Number(solarTotals.cumSolarExact).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kWh`
+                    : `${Number(solarTotals.prod).toLocaleString()} kWh`}
+                </div>
+                <div className="text-xs text-[#1f7a4c] font-mono font-medium">
+                  {(Number(spanFilter === 'yearly' ? solarTotals.cumSolarExact : solarTotals.prod) / 1000).toFixed(3)} MWh · EOD Meter: {Number(solarTotals.maxEodMeter).toLocaleString()} kWh
+                </div>
               </div>
 
               <div className={`rounded-xl p-5 space-y-1 ${calloutBg}`}>
