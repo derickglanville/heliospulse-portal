@@ -20,6 +20,7 @@ export default function NysegMonthlyBillsTab({
 
   const bills = moreBillsData?.bills || [];
   const creditHistory = moreBillsData?.credit_bank_history || [];
+  const creditHistoryDesc = useMemo(() => [...creditHistory].reverse(), [creditHistory]);
   const projection = moreBillsData?.next_bill_projection || null;
 
   const filteredBills = useMemo(() => {
@@ -124,39 +125,11 @@ export default function NysegMonthlyBillsTab({
             </span>
           </div>
 
-          {/* Horizontal Progression Bars */}
+          {/* Horizontal Progression Bars (Descending Date Order) */}
           <div className={`divide-y ${dividerBorder}`}>
-            {creditHistory.map((item, idx) => {
-              const barPct = Math.min(100, Math.max(4, (item.remaining_kwh / maxBankKwh) * 100));
-              return (
-                <div key={item.period_label} className={`${idx === 0 ? 'pb-4' : 'py-4'} space-y-2`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div>
-                      <span className="font-bold font-mono">{item.period_label}</span>
-                      <span className={`ml-2 ${mutedText}`}>Stmt {item.statement_date}</span>
-                    </div>
-                    <span className="font-mono font-bold text-[#1f7a4c]">
-                      {item.remaining_kwh.toLocaleString()} kWh ({item.net_change_kwh >= 0 ? `+${item.net_change_kwh}` : item.net_change_kwh} kWh)
-                    </span>
-                  </div>
-
-                  <div className={`w-full h-3 rounded-full overflow-hidden ${trackBg}`}>
-                    <div
-                      style={{ width: `${barPct}%` }}
-                      className="h-full rounded-full bg-[#1f7a4c] transition-all duration-500"
-                    />
-                  </div>
-
-                  <div className={`text-[11px] font-mono ${mutedText}`}>
-                    Prior {item.prior_kwh.toLocaleString()} + M02 Export {item.exported_kwh.toLocaleString()} − Credited Use {item.credited_used_kwh.toLocaleString()} = <strong className={darkMode ? 'text-slate-200' : 'text-[#1a1917]'}>{item.remaining_kwh.toLocaleString()} kWh</strong> (~${item.estimated_value.toFixed(2)})
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Projected Next Bill Bar */}
+            {/* Projected Next Bill Bar (Newest) */}
             {projection && (
-              <div className="pt-4 space-y-2">
+              <div className={`${creditHistoryDesc.length > 0 ? 'pb-4' : ''} space-y-2`}>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div>
                     <span className="font-bold font-mono text-[#e07a16]">
@@ -180,6 +153,37 @@ export default function NysegMonthlyBillsTab({
                 </div>
               </div>
             )}
+
+            {creditHistoryDesc.map((item, idx) => {
+              const barPct = Math.min(100, Math.max(4, (item.remaining_kwh / maxBankKwh) * 100));
+              const isFirst = !projection && idx === 0;
+              const isLast = idx === creditHistoryDesc.length - 1;
+              const padClass = isFirst ? (isLast ? '' : 'pb-4') : isLast ? 'pt-4' : 'py-4';
+              return (
+                <div key={item.period_label} className={`${padClass} space-y-2`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div>
+                      <span className="font-bold font-mono">{item.period_label}</span>
+                      <span className={`ml-2 ${mutedText}`}>Stmt {item.statement_date}</span>
+                    </div>
+                    <span className="font-mono font-bold text-[#1f7a4c]">
+                      {item.remaining_kwh.toLocaleString()} kWh ({item.net_change_kwh >= 0 ? `+${item.net_change_kwh}` : item.net_change_kwh} kWh)
+                    </span>
+                  </div>
+
+                  <div className={`w-full h-3 rounded-full overflow-hidden ${trackBg}`}>
+                    <div
+                      style={{ width: `${barPct}%` }}
+                      className="h-full rounded-full bg-[#1f7a4c] transition-all duration-500"
+                    />
+                  </div>
+
+                  <div className={`text-[11px] font-mono ${mutedText}`}>
+                    Prior {item.prior_kwh.toLocaleString()} + M02 Export {item.exported_kwh.toLocaleString()} − Credited Use {item.credited_used_kwh.toLocaleString()} = <strong className={darkMode ? 'text-slate-200' : 'text-[#1a1917]'}>{item.remaining_kwh.toLocaleString()} kWh</strong> (~${item.estimated_value.toFixed(2)})
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
