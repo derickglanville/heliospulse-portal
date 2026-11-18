@@ -8,6 +8,8 @@ import {
   ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home, Minimize2
 } from 'lucide-react';
 import telemetryData from './data/telemetryData.json';
+import solarHomeSideImg from './assets/solar-home-side.png';
+import solarFarmSideImg from './assets/solar-farm-side.png';
 
 const INITIAL_SOLAR_DAILY = telemetryData.daily_rows;
 const TELEMETRY_META = telemetryData.metadata;
@@ -1122,7 +1124,7 @@ export default function HeliosPulsePortal() {
       </div>
 
       {/* 7 SUMMARY KPI CARDS USING CALLOUT STANDARD */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
         <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
           <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>POWER</div>
           <div className="text-lg font-bold font-mono text-[#e07a16]">{gridSpanKpis.power} kWh</div>
@@ -1460,77 +1462,106 @@ export default function HeliosPulsePortal() {
 
   return (
     <div className={`min-h-screen transition-colors duration-200 font-sans ${pageBg}`}>
-      {/* TOP MENU BAR WITH PILL BUTTONS (ALIGNED TO THE SAME max-w-6xl CONTAINER AS CONTENT) */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 pt-4 pb-3 flex flex-wrap items-center justify-between gap-3">
-          <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {TOP_MENU_ITEMS.map((item) => {
-              const active = activeTab === item.id;
-              return (
+      <div className="max-w-[1720px] mx-auto px-3 sm:px-5 py-4 grid grid-cols-1 lg:grid-cols-[230px_minmax(0,1fr)_230px] xl:grid-cols-[270px_minmax(0,1fr)_270px] 2xl:grid-cols-[310px_minmax(0,1fr)_310px] gap-5 items-start">
+        {/* LEFT SIDE RAIL: RESIDENTIAL SOLAR HOME */}
+        <aside className="hidden lg:block sticky top-4 h-[calc(100vh-2rem)]">
+          <div className={`relative w-full h-full rounded-2xl border overflow-hidden shadow-sm ${darkMode ? 'border-slate-800' : 'border-[#e6e2d8]'}`}>
+            <img
+              src={solarHomeSideImg}
+              alt="Residential solar roof array"
+              className="w-full h-full object-cover"
+            />
+            <div className={`absolute inset-x-3 bottom-3 rounded-xl border p-4 backdrop-blur-md shadow-sm ${
+              darkMode
+                ? 'bg-slate-900/85 border-slate-700 text-slate-100'
+                : 'bg-[#f6f4ef]/88 border-[#e6e2d8] text-[#1a1917]'
+            }`}>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedText}`}>
+                RESIDENTIAL ARRAY
+              </div>
+              <h3 className="text-sm font-bold tracking-tight mt-0.5">
+                Home-scale production context
+              </h3>
+              <p className={`text-xs leading-relaxed mt-1 ${mutedText}`}>
+                Keep rooftop system performance visible alongside production, weather, and household energy flow.
+              </p>
+            </div>
+          </div>
+        </aside>
+
+        {/* CENTER CONTENT COLUMN */}
+        <div className="min-w-0 space-y-6">
+          {/* TOP MENU BAR WITH PILL BUTTONS */}
+          <header className={`sticky top-0 z-30 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
+            <div className="px-4 sm:px-6 pt-3.5 pb-3 flex flex-wrap items-center justify-between gap-3">
+              <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                {TOP_MENU_ITEMS.map((item) => {
+                  const active = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-medium transition cursor-pointer ${
+                        active
+                          ? darkMode
+                            ? 'bg-amber-400 text-slate-950 font-semibold shadow-xs'
+                            : 'bg-[#1a1917] text-white font-semibold shadow-xs'
+                          : darkMode
+                          ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-900'
+                          : 'text-[#5c5953] hover:text-[#1a1917] hover:bg-[#e9e5dc]'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono ${calloutBg}`}
+                  title="Automated Windows Task & In-App Scheduler run daily at 7:30 AM EST"
+                >
+                  Auto-Sync: 7:30 AM
+                </span>
                 <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-medium transition cursor-pointer ${
-                    active
-                      ? darkMode
-                        ? 'bg-amber-400 text-slate-950 font-semibold shadow-xs'
-                        : 'bg-[#1a1917] text-white font-semibold shadow-xs'
-                      : darkMode
-                      ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-900'
-                      : 'text-[#5c5953] hover:text-[#1a1917] hover:bg-[#e9e5dc]'
+                  onClick={triggerSyncPipeline}
+                  disabled={isSyncing}
+                  title="Run 6-Stage CSV Sync Pipeline (Scheduled daily at 7:30 AM)"
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${
+                    darkMode
+                      ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:bg-slate-800'
+                      : 'bg-white border-[#dcd8ce] text-[#1f7a4c] hover:bg-[#efece4]'
                   }`}
                 >
-                  {item.label}
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Syncing...' : 'Sync CSVs'}</span>
                 </button>
-              );
-            })}
-          </nav>
 
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono ${calloutBg}`}
-              title="Automated Windows Task & In-App Scheduler run daily at 7:30 AM EST"
-            >
-              Auto-Sync: 7:30 AM
-            </span>
-            <button
-              onClick={triggerSyncPipeline}
-              disabled={isSyncing}
-              title="Run 6-Stage CSV Sync Pipeline (Scheduled daily at 7:30 AM)"
-              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${
-                darkMode
-                  ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:bg-slate-800'
-                  : 'bg-white border-[#dcd8ce] text-[#1f7a4c] hover:bg-[#efece4]'
-              }`}
-            >
-              <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Syncing...' : 'Sync CSVs'}</span>
-            </button>
+                <button
+                  onClick={() => setShowAiDrawer(true)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border transition cursor-pointer ${pillBtnSecondary}`}
+                >
+                  <Sparkles className="w-3 h-3 text-[#e07a16]" />
+                  <span className="hidden sm:inline">Ask AI</span>
+                </button>
 
-            <button
-              onClick={() => setShowAiDrawer(true)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border transition cursor-pointer ${pillBtnSecondary}`}
-            >
-              <Sparkles className="w-3 h-3 text-[#e07a16]" />
-              <span className="hidden sm:inline">Ask AI</span>
-            </button>
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className={`p-1.5 rounded-full border transition cursor-pointer ${
+                    darkMode ? 'bg-slate-900 border-slate-800 text-amber-400' : 'bg-white border-[#dcd8ce] text-[#5c5953]'
+                  }`}
+                  aria-label="Toggle theme"
+                  title="Toggle light/dark mode"
+                >
+                  {darkMode ? <SunMedium className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          </header>
 
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className={`p-1.5 rounded-full border transition cursor-pointer ${
-                darkMode ? 'bg-slate-900 border-slate-800 text-amber-400' : 'bg-white border-[#dcd8ce] text-[#5c5953]'
-              }`}
-              aria-label="Toggle theme"
-              title="Toggle light/dark mode"
-            >
-              {darkMode ? <SunMedium className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* MAIN CONTENT CONTAINER (UNIFIED max-w-6xl ACROSS ALL TABS) */}
-      <main className="max-w-6xl mx-auto px-5 sm:px-8 py-8 space-y-8">
+          {/* MAIN CONTENT CONTAINER */}
+          <main className="px-1 sm:px-2 pb-10 space-y-8">
         {/* TAB 1: ENERGY DISTRIBUTION (UNIFIED SOLAR SAVINGS PALETTE & TYPOGRAPHY) */}
         {activeTab === 'distribution' && (
           <div className="space-y-6">
@@ -1543,7 +1574,7 @@ export default function HeliosPulsePortal() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-stretch">
               {/* COLUMN 1: DAILY ENERGY FLOW */}
               <div className={`rounded-2xl border overflow-hidden flex flex-col justify-between ${cardBg}`}>
                 <div className="p-5 pb-3">
@@ -2743,7 +2774,35 @@ export default function HeliosPulsePortal() {
             </div>
           </div>
         )}
-      </main>
+          </main>
+        </div>
+
+        {/* RIGHT SIDE RAIL: UTILITY SOLAR ARRAY */}
+        <aside className="hidden lg:block sticky top-4 h-[calc(100vh-2rem)]">
+          <div className={`relative w-full h-full rounded-2xl border overflow-hidden shadow-sm ${darkMode ? 'border-slate-800' : 'border-[#e6e2d8]'}`}>
+            <img
+              src={solarFarmSideImg}
+              alt="Utility scale solar array"
+              className="w-full h-full object-cover"
+            />
+            <div className={`absolute inset-x-3 bottom-3 rounded-xl border p-4 backdrop-blur-md shadow-sm ${
+              darkMode
+                ? 'bg-slate-900/85 border-slate-700 text-slate-100'
+                : 'bg-[#f6f4ef]/88 border-[#e6e2d8] text-[#1a1917]'
+            }`}>
+              <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedText}`}>
+                UTILITY PERSPECTIVE
+              </div>
+              <h3 className="text-sm font-bold tracking-tight mt-0.5">
+                Grid-scale reference frame
+              </h3>
+              <p className={`text-xs leading-relaxed mt-1 ${mutedText}`}>
+                Balance residential performance against export behavior, annual projections, and contract progress.
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
 
       {/* POP OUT FULL-SCREEN INTERVAL DATA GRID MODAL */}
       {gridPopOut && (
