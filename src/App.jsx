@@ -204,6 +204,7 @@ function HeliosPulsePortalInner() {
 
   const [solarRows, setSolarRows] = useState(INITIAL_SOLAR_DAILY);
   const [moreBillsData, setMoreBillsData] = useState(telemetryData.more_bills);
+  const [creditBankForecastBase, setCreditBankForecastBase] = useState(telemetryData.credit_bank_forecast);
   const [telemetryAlerts, setTelemetryAlerts] = useState(telemetryData.alerts || []);
   const [notificationStatus, setNotificationStatus] = useState(telemetryData.notification_status || null);
   const [appRuntimeIssues, setAppRuntimeIssues] = useState([]);
@@ -255,6 +256,50 @@ function HeliosPulsePortalInner() {
       .filter((r) => r.status === 'RECONCILED')
       .sort((a, b) => (a.date > b.date ? 1 : -1));
   }, [solarRows]);
+
+  // Keep Credit Forecaster unbilled interval sums & opening balance locked in sync with Interval Data Grid reconciled rows
+  const liveCreditBankForecast = useMemo(() => {
+    const base = creditBankForecastBase || CREDIT_BANK_FORECAST;
+    if (!base) return null;
+    const officialPeriodEnd = base.official_period_end || '2026-11-03';
+    const officialBalance = Number(base.official_credit_kwh ?? 2210);
+    const postStmtRows = reconciledRowsChrono.filter((r) => r.date > officialPeriodEnd);
+    if (postStmtRows.length === 0) {
+      return { ...base, unbilled_reconciled_days: 0 };
+    }
+    const unbilledM01 = postStmtRows.reduce((a, r) => a + (r.m01_import_kwh || 0), 0);
+    const unbilledM02 = postStmtRows.reduce((a, r) => a + (r.m02_export_kwh || 0), 0);
+    const unbilledNet = unbilledM02 - unbilledM01;
+    const openingProjected = officialBalance + unbilledNet;
+    const intervalEnd = postStmtRows[postStmtRows.length - 1].date;
+
+    const baseRows = base.rows || [];
+    let runningCredit = openingProjected;
+    let exhaustedMonth = null;
+    const syncedRows = baseRows.map((row) => {
+      const nextCredit = runningCredit - (row.net_usage_kwh || 0);
+      runningCredit = nextCredit;
+      if (exhaustedMonth === null && nextCredit <= 0) {
+        exhaustedMonth = row.month;
+      }
+      return {
+        ...row,
+        ending_credit_kwh: nextCredit,
+      };
+    });
+
+    return {
+      ...base,
+      interval_file_end: intervalEnd,
+      unbilled_m01_kwh: Number(unbilledM01.toFixed(3)),
+      unbilled_m02_kwh: Number(unbilledM02.toFixed(3)),
+      unbilled_net_credit_kwh: Number(unbilledNet.toFixed(3)),
+      opening_projected_kwh: Number(openingProjected.toFixed(3)),
+      unbilled_reconciled_days: postStmtRows.length,
+      exhausted_month: exhaustedMonth,
+      rows: syncedRows,
+    };
+  }, [creditBankForecastBase, reconciledRowsChrono]);
 
   // Build the Interval Data Grid dataset (reconciled rows + temporary NYSEG placeholders)
   const fullIntervalGridRows = useMemo(() => {
@@ -722,6 +767,9 @@ function HeliosPulsePortalInner() {
         setBannerCleared(false);
       }
     }
+    if (fresh.credit_bank_forecast) {
+      setCreditBankForecastBase(fresh.credit_bank_forecast);
+    }
     if (fresh.more_bills) {
       setMoreBillsData(fresh.more_bills);
       setLastFolderEvent(
@@ -1141,14 +1189,14 @@ function HeliosPulsePortalInner() {
     } else if (ql.includes('distribution') || ql.includes('grid balance') || ql.includes('energy flow')) {
       reply = `On ${distDayMetrics.date} (Energy Distribution), your SunRun array produced ${distDayMetrics.solar} kWh, NYSEG delivered ${distDayMetrics.m01} kWh (M01) and received ${distDayMetrics.m02} kWh (M02), resulting in ${distDayMetrics.homeConsumed} kWh estimated home consumption. Grid dependence was ${distDayMetrics.gridDepPct}% and solar coverage was ${distDayMetrics.solarCovPct}% (${distDayMetrics.co2AvoidedLb} lb CO₂ avoided).`;
     } else if (ql.includes('credit') || ql.includes('bank') || ql.includes('winter') || ql.includes('forecast')) {
-      const forecastRows = CREDIT_BANK_FORECAST?.rows || [];
-      const minBankRow = forecastRows.length
-        ? forecastRows.reduce((minR, r) => (r.ending_bank_kwh < minR.ending_bank_kwh ? r : minR), forecastRows[0])
+      const forecastRowsList = liveCreditBankForecast?.rows || [];
+      const minBankRow = forecastRowsList.length
+        ? forecastRowsList.reduce((minR, r) => (r.ending_credit_kwh < minR.ending_credit_kwh ? r : minR), forecastRowsList[0])
         : null;
       const historyText = (moreBillsData?.credit_bank_history || [])
         .map((h) => `${h.period_label.slice(0, 10)}: ${h.remaining_kwh} kWh`)
         .join(' → ');
-      reply = `Your official NYSEG credit-bank balance is ${bankNow.toLocaleString()} kWh (${historyText || '0 → 2,210 kWh'}). With unbilled flow included, the 12-month forecast opens at ${(CREDIT_BANK_FORECAST?.opening_projected_kwh ?? 2075.0).toFixed(1)} kWh${minBankRow ? `, reaches its winter low of ${Math.round(minBankRow.ending_bank_kwh).toLocaleString()} kWh in ${minBankRow.month_label || minBankRow.month}` : ''}, and does not exhaust in the next 12 months.`;
+      reply = `Your official NYSEG credit-bank balance is ${bankNow.toLocaleString()} kWh (${historyText || '0 → 2,210 kWh'}). With ${liveCreditBankForecast?.unbilled_reconciled_days ?? 11} reconciled grid days after ${liveCreditBankForecast?.official_period_end || '2026-11-03'} (${(liveCreditBankForecast?.unbilled_net_credit_kwh ?? -138.2).toFixed(1)} kWh), the 12-month forecast opens at ${(liveCreditBankForecast?.opening_projected_kwh ?? 2071.8).toFixed(1)} kWh${minBankRow ? `, reaches its winter low of ${Math.round(minBankRow.ending_credit_kwh).toLocaleString()} kWh in ${minBankRow.month}` : ''}, and ${liveCreditBankForecast?.exhausted_month ? `exhausts in ${liveCreditBankForecast.exhausted_month}` : 'does not exhaust in the next 12 months'}.`;
     } else if (ql.includes('saved') || ql.includes('saving') || ql.includes('$0.24') || ql.includes('dollar')) {
       const rate = 0.24;
       const grossSolarVal = Number(solarTotals.cumSolar) * rate;
@@ -1852,8 +1900,8 @@ function HeliosPulsePortalInner() {
     </div>
   );
 
-  const forecastRows = CREDIT_BANK_FORECAST?.rows || [];
-  const forecastOpeningBalance = CREDIT_BANK_FORECAST?.opening_projected_kwh ?? 2075.043;
+  const forecastRows = liveCreditBankForecast?.rows || [];
+  const forecastOpeningBalance = liveCreditBankForecast?.opening_projected_kwh ?? 2071.79;
 
   return (
     <div className={`min-h-screen transition-colors duration-200 font-sans ${pageBg}`}>
@@ -2720,14 +2768,14 @@ function HeliosPulsePortalInner() {
         {activeTab === 'datagrid' && renderIntervalDataGrid(false)}
 
         {/* TAB 3: CREDIT FORECASTER (STANDARD SOLAR SAVINGS THEME) */}
-        {activeTab === 'estimator' && CREDIT_BANK_FORECAST && (
+        {activeTab === 'estimator' && liveCreditBankForecast && (
           <div className="space-y-6">
             <div className="space-y-2.5 max-w-2xl">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                 Will your NYSEG credit bank cover winter usage?
               </h1>
               <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
-                The official <strong className="font-semibold">{Math.round(CREDIT_BANK_FORECAST.official_credit_kwh).toLocaleString()} kWh</strong> balance is from your <strong className="font-semibold">{CREDIT_BANK_FORECAST.official_statement_date}</strong> NYSEG statement. Including actual interval flow through <strong className="font-semibold">{CREDIT_BANK_FORECAST.interval_file_end}</strong> (<strong className="font-semibold">{CREDIT_BANK_FORECAST.unbilled_net_credit_kwh.toFixed(1)} kWh</strong>), the 12-month forecast opens at <strong className="font-semibold">{CREDIT_BANK_FORECAST.opening_projected_kwh.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kWh</strong>.
+                The official <strong className="font-semibold">{Math.round(liveCreditBankForecast.official_credit_kwh).toLocaleString()} kWh</strong> balance is from your <strong className="font-semibold">{liveCreditBankForecast.official_statement_date}</strong> NYSEG statement (period ending <strong className="font-semibold">{liveCreditBankForecast.official_period_end || '2026-11-03'}</strong>). Including <strong className="font-semibold">{liveCreditBankForecast.unbilled_reconciled_days}</strong> reconciled Interval Data Grid days through <strong className="font-semibold">{liveCreditBankForecast.interval_file_end}</strong> (<strong className="font-semibold">{liveCreditBankForecast.unbilled_net_credit_kwh.toFixed(1)} kWh</strong>, excluding temporary display placeholders), the 12-month forecast opens at <strong className="font-semibold">{liveCreditBankForecast.opening_projected_kwh.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kWh</strong>.
               </p>
             </div>
 
@@ -2737,19 +2785,19 @@ function HeliosPulsePortalInner() {
                 <div className="font-bold text-base">
                   Starting official balance:{' '}
                   <span className="font-mono text-[#1f7a4c]">
-                    {Math.round(CREDIT_BANK_FORECAST.official_credit_kwh).toLocaleString()} kWh
+                    {Math.round(liveCreditBankForecast.official_credit_kwh).toLocaleString()} kWh
                   </span>
                 </div>
                 <span className={`text-xs font-mono font-semibold ${mutedText}`}>
                   Estimated change since statement:{' '}
-                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh >= 0 ? '+' : ''}
-                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh.toFixed(1)} kWh
+                  {liveCreditBankForecast.unbilled_net_credit_kwh >= 0 ? '+' : ''}
+                  {liveCreditBankForecast.unbilled_net_credit_kwh.toFixed(1)} kWh
                 </span>
               </div>
 
               <div className={`space-y-1.5 text-xs sm:text-[13px] leading-relaxed ${mutedText}`}>
                 <p>
-                  {CREDIT_BANK_FORECAST.reconciliation?.annual_settlement_status ??
+                  {liveCreditBankForecast.reconciliation?.annual_settlement_status ??
                     'No NYSEG annual settlement, expiration, or conversion rule is configured. The forecast preserves kWh credits until an official statement or confirmed tariff rule changes them.'}
                 </p>
                 <p>
@@ -2814,33 +2862,33 @@ function HeliosPulsePortalInner() {
               <div className={`rounded-xl p-5 space-y-1.5 ${calloutBg}`}>
                 <div className={`text-xs font-medium ${mutedText}`}>Official NYSEG credit balance</div>
                 <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-[#1f7a4c]">
-                  {CREDIT_BANK_FORECAST.official_credit_kwh.toLocaleString('en-US', {
+                  {liveCreditBankForecast.official_credit_kwh.toLocaleString('en-US', {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                   })}{' '}
                   kWh
                 </div>
                 <div className={`text-xs ${mutedText}`}>
-                  Statement {CREDIT_BANK_FORECAST.official_statement_date}
+                  Statement {liveCreditBankForecast.official_statement_date}
                 </div>
               </div>
 
               <div className={`rounded-xl p-5 space-y-1.5 ${calloutBg}`}>
                 <div className={`text-xs font-medium ${mutedText}`}>Estimated credits since statement</div>
                 <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight">
-                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh >= 0 ? '+' : ''}
-                  {CREDIT_BANK_FORECAST.unbilled_net_credit_kwh.toFixed(1)} kWh
+                  {liveCreditBankForecast.unbilled_net_credit_kwh >= 0 ? '+' : ''}
+                  {liveCreditBankForecast.unbilled_net_credit_kwh.toFixed(1)} kWh
                 </div>
                 <div className={`text-xs font-mono ${mutedText}`}>
-                  M02: {CREDIT_BANK_FORECAST.unbilled_m02_kwh.toFixed(1)} − M01:{' '}
-                  {CREDIT_BANK_FORECAST.unbilled_m01_kwh.toFixed(1)}
+                  M02: {liveCreditBankForecast.unbilled_m02_kwh.toFixed(1)} − M01:{' '}
+                  {liveCreditBankForecast.unbilled_m01_kwh.toFixed(1)} ({liveCreditBankForecast.unbilled_reconciled_days}d grid sync)
                 </div>
               </div>
 
               <div className={`rounded-xl p-5 space-y-1.5 ${calloutBg}`}>
                 <div className={`text-xs font-medium ${mutedText}`}>Forecast opening balance</div>
                 <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-[#1f7a4c]">
-                  {CREDIT_BANK_FORECAST.opening_projected_kwh.toLocaleString('en-US', {
+                  {liveCreditBankForecast.opening_projected_kwh.toLocaleString('en-US', {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                   })}{' '}
@@ -2854,7 +2902,7 @@ function HeliosPulsePortalInner() {
               <div className={`rounded-xl p-5 space-y-1.5 ${calloutBg}`}>
                 <div className={`text-xs font-medium ${mutedText}`}>Credit-bank exhaustion</div>
                 <div className="text-xl sm:text-2xl font-bold tracking-tight text-[#1f7a4c]">
-                  {CREDIT_BANK_FORECAST.exhausted_month || 'Not in next 12 months'}
+                  {liveCreditBankForecast.exhausted_month || 'Not in next 12 months'}
                 </div>
                 <div className={`text-xs ${mutedText}`}>Based on this forecast only</div>
               </div>
