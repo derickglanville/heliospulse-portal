@@ -208,6 +208,8 @@ function HeliosPulsePortalInner() {
   const [notificationStatus, setNotificationStatus] = useState(telemetryData.notification_status || null);
   const [appRuntimeIssues, setAppRuntimeIssues] = useState([]);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
+  const [dismissedAlertKeys, setDismissedAlertKeys] = useState([]);
+  const [bannerCleared, setBannerCleared] = useState(false);
   const [aiHoverOpen, setAiHoverOpen] = useState(false);
   const aiHoverCloseTimerRef = useRef(null);
   const openAiHoverMenu = () => {
@@ -696,8 +698,11 @@ function HeliosPulsePortalInner() {
         ...prev,
       ].slice(0, 10);
     });
+    setBannerCleared(false);
     postIssueToLocalServer(title, message, source, details);
   };
+
+  const getAlertKey = (alert) => `${alert.code}::${(alert.dates || []).join(',')}`;
 
   const applyFreshTelemetrySnapshot = (fresh, eventSource = 'sync') => {
     if (!fresh) return;
@@ -709,9 +714,13 @@ function HeliosPulsePortalInner() {
     }
     if (Array.isArray(fresh.alerts)) {
       setTelemetryAlerts(fresh.alerts);
+      if (fresh.alerts.length > 0) setBannerCleared(false);
     }
     if (fresh.notification_status) {
       setNotificationStatus(fresh.notification_status);
+      if ((fresh.notification_status.new_sunrun_count || 0) > 0 || (fresh.notification_status.new_nyseg_count || 0) > 0) {
+        setBannerCleared(false);
+      }
     }
     if (fresh.more_bills) {
       setMoreBillsData(fresh.more_bills);
@@ -752,8 +761,17 @@ function HeliosPulsePortalInner() {
       });
     }
 
-    return merged;
-  }, [appRuntimeIssues, telemetryAlerts, solarRows]);
+    return merged.filter((a) => !dismissedAlertKeys.includes(getAlertKey(a)));
+  }, [appRuntimeIssues, telemetryAlerts, solarRows, dismissedAlertKeys]);
+
+  const handleClearAlertsBanner = () => {
+    setDismissedAlertKeys((prev) => [
+      ...new Set([...prev, ...combinedAlerts.map((a) => getAlertKey(a))]),
+    ]);
+    setAppRuntimeIssues([]);
+    setAlertsExpanded(false);
+    setBannerCleared(true);
+  };
 
   const triggerSyncPipeline = async () => {
     if (isSyncing) return;
@@ -1996,7 +2014,7 @@ function HeliosPulsePortalInner() {
           {/* MAIN CONTENT CONTAINER */}
           <main className="px-1 sm:px-2 pb-10 space-y-8">
             {/* IN-APP ANOMALIES, ISSUES & EMAIL NOTIFICATION STATUS BAR */}
-            {(combinedAlerts.length > 0 || (notificationStatus?.recent_email_events?.length || 0) > 0) && (
+            {!bannerCleared && (combinedAlerts.length > 0 || (notificationStatus?.recent_email_events?.length || 0) > 0) && (
               <div
                 className={`rounded-2xl border p-4 space-y-3 ${
                   combinedAlerts.some((a) => a.severity === 'error')
@@ -2037,12 +2055,23 @@ function HeliosPulsePortalInner() {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => setAlertsExpanded((v) => !v)}
-                    className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
-                  >
-                    {alertsExpanded ? 'Hide Details' : 'View Details'}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAlertsExpanded((v) => !v)}
+                      className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
+                    >
+                      {alertsExpanded ? 'Hide Details' : 'View Details'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAlertsBanner}
+                      className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
+                      title="Clear displayed anomaly & issue alerts"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
 
                 {/* Concise primary alert message always visible */}
