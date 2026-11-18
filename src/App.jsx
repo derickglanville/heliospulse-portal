@@ -76,6 +76,14 @@ const TOP_MENU_ITEMS = [
   { id: 'system', label: 'Your system' },
 ];
 
+const AI_SUGGESTED_QUESTIONS = [
+  'How is my NYSEG credit bank?',
+  'What will my next NYSEG bill be?',
+  'Explain monthly CSV totals',
+  'How much solar energy has my system produced?',
+  'Which days had net energy exports (M02 > M01)?',
+];
+
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -910,11 +918,22 @@ export default function HeliosPulsePortal() {
   const handleAskAi = (promptText) => {
     const q = (promptText || aiQuery).trim();
     if (!q) return;
+    const ql = q.toLowerCase();
+    const proj = moreBillsData?.next_bill_projection;
+    const bankNow = moreBillsData?.current_credit_bank_kwh ?? 2210;
     let reply = '';
-    if (q.toLowerCase().includes('credit') || q.toLowerCase().includes('bank')) {
-      reply = `Your official NYSEG credit-bank balance is 2,210.0 kWh on the 2026-11-05 statement. Including unbilled interval flow through 2026-11-14 (-135.0 kWh from M02: 88.8 − M01: 223.8), your forecast opening balance is 2,075.0 kWh, which stays positive through winter (lowest point: 774 kWh in February 2027) and recovers to 6,368 kWh by November 2027.`;
-    } else if (q.toLowerCase().includes('bill') || q.toLowerCase().includes('nyseg') || q.toLowerCase().includes('month')) {
-      reply = `Your latest NYSEG statement (2026-11-05 for period 2026-10-07 to 2026-11-03) recorded 437 kWh M01 import and 591 kWh M02 export (+154 kWh net export), with $43.57 in energy charges ($40.99 delivery + $0.00 supply + $2.58 taxes) and 2,210 kWh remaining in your official excess-generation credit bank.`;
+    if (ql.includes('next') && ql.includes('bill')) {
+      reply = proj
+        ? `Projected next NYSEG bill (${proj.billing_start_date} to ${proj.billing_end_date}): $${proj.projected_energy_charge.toFixed(2)} minimum charge (${proj.measured_days} measured days + ${proj.remaining_forecast_days} forecast days). Projected M01 import is ${proj.projected_m01_kwh} kWh vs ${proj.projected_m02_kwh} kWh M02 export (+${proj.projected_net_import_kwh} kWh net import), reducing your Credit Bank from ${proj.credit_bank_before_kwh.toLocaleString()} kWh to ${proj.credit_bank_after_kwh.toLocaleString()} kWh (${proj.credit_bank_delta_kwh.toFixed(1)} kWh).`
+        : `Your latest NYSEG bill was $43.57; no next-bill projection is currently loaded.`;
+    } else if (ql.includes('credit') || ql.includes('bank')) {
+      reply = `Your official NYSEG credit-bank balance is ${bankNow.toLocaleString()} kWh on the 2026-11-05 statement. Including unbilled interval flow through ${TELEMETRY_META.latest_nyseg_date || '2026-11-15'}, your forecast opening balance is ${(CREDIT_BANK_FORECAST?.opening_projected_kwh ?? 2071.8).toFixed(1)} kWh and stays positive through winter.`;
+    } else if (ql.includes('export') || ql.includes('m02') || ql.includes('m01')) {
+      const exportDays = reconciledRowsChrono.filter((r) => (r.m02_export_kwh || 0) > (r.m01_import_kwh || 0)).length;
+      const importDays = reconciledRowsChrono.length - exportDays;
+      reply = `Across ${reconciledRowsChrono.length} NYSEG-reconciled days, ${exportDays} days had net exports (M02 > M01, highlighted green) and ${importDays} days had net imports (M02 ≤ M01, highlighted yellow). Cumulative NYSEG totals: ${solarTotals.cumM02} kWh M02 exported vs ${solarTotals.cumM01} kWh M01 imported.`;
+    } else if (ql.includes('bill') || ql.includes('nyseg') || ql.includes('month')) {
+      reply = `Your latest NYSEG statement (2026-11-05 for period 2026-10-07 to 2026-11-03) recorded 437 kWh M01 import and 591 kWh M02 export (+154 kWh net export), with $43.57 in energy charges ($40.99 delivery + $0.00 supply + $2.58 taxes) and ${bankNow.toLocaleString()} kWh remaining in your official excess-generation credit bank.`;
     } else {
       reply = `Your Sunrun array has produced ${solarTotals.cumSolar} kWh cumulatively across ${solarTotals.totalDays} CSV days (End-of-Day Meter Reading: ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}).`;
     }
@@ -1667,13 +1686,43 @@ export default function HeliosPulsePortal() {
                   <span>{isSyncing ? 'Syncing...' : 'Sync CSVs'}</span>
                 </button>
 
-                <button
-                  onClick={() => setShowAiDrawer(true)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border transition cursor-pointer ${pillBtnSecondary}`}
-                >
-                  <Sparkles className="w-3 h-3 text-[#e07a16]" />
-                  <span className="hidden sm:inline">Ask AI</span>
-                </button>
+                <div className="relative group">
+                  <button
+                    onClick={() => setShowAiDrawer(true)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border transition cursor-pointer ${pillBtnSecondary}`}
+                  >
+                    <Sparkles className="w-3 h-3 text-[#e07a16]" />
+                    <span className="hidden sm:inline">Ask AI</span>
+                  </button>
+
+                  {/* HOVER POPOVER: LIST OF QUESTIONS YOU CAN ASK */}
+                  <div className="hidden group-hover:block group-focus-within:block absolute left-0 sm:left-auto sm:right-0 top-full pt-1.5 w-80 max-w-[calc(100vw-2rem)] z-50">
+                    <div className={`rounded-2xl border p-2.5 shadow-xl space-y-1 ${cardBg}`}>
+                      <div className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5 ${mutedText}`}>
+                        <Sparkles className="w-3 h-3 text-[#e07a16]" />
+                        <span>Questions you can ask</span>
+                      </div>
+                      {AI_SUGGESTED_QUESTIONS.map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => {
+                            setShowAiDrawer(true);
+                            handleAskAi(q);
+                          }}
+                          className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-start gap-2 ${
+                            darkMode
+                              ? 'hover:bg-slate-800 text-slate-200'
+                              : 'hover:bg-[#efece4] text-[#1a1917]'
+                          }`}
+                        >
+                          <span className="text-[#e07a16] font-bold mt-px">→</span>
+                          <span>{q}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
                 <button
                   onClick={() => setDarkMode(!darkMode)}
@@ -3138,7 +3187,7 @@ export default function HeliosPulsePortal() {
 
             <div className={`space-y-2 pt-3 border-t ${dividerBorder}`}>
               <div className="flex flex-wrap gap-1.5">
-                {['How is my NYSEG credit bank?', 'Explain monthly CSV totals'].map((preset) => (
+                {AI_SUGGESTED_QUESTIONS.map((preset) => (
                   <button
                     key={preset}
                     onClick={() => handleAskAi(preset)}
