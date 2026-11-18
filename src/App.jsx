@@ -144,6 +144,12 @@ export default function HeliosPulsePortal() {
   const [gridSortAsc, setGridSortAsc] = useState(false);
   const [gridPopOut, setGridPopOut] = useState(false);
   const [gridNotes, setGridNotes] = useState({});
+  const [selectedGridRows, setSelectedGridRows] = useState([]);
+  const toggleSelectGridRow = (rowDate) => {
+    setSelectedGridRows((prev) =>
+      prev.includes(rowDate) ? prev.filter((d) => d !== rowDate) : [...prev, rowDate]
+    );
+  };
   const [colFilterPower, setColFilterPower] = useState('No');
   const [colFilterM01, setColFilterM01] = useState('No');
   const [colFilterM02, setColFilterM02] = useState('No');
@@ -987,6 +993,7 @@ export default function HeliosPulsePortal() {
   const mutedText = darkMode ? 'text-slate-400' : 'text-[#6b675e]';
   const trackBg = darkMode ? 'bg-slate-800' : 'bg-[#edeae2]';
   const dividerBorder = darkMode ? 'border-slate-800' : 'border-[#ece8df]';
+  const sheetGridBorder = darkMode ? 'border-slate-500' : 'border-[#6b665c]';
   const pillBtnSecondary = darkMode
     ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800'
     : 'bg-white border-[#dcd8ce] text-[#1a1917] hover:bg-[#efece4]';
@@ -1079,6 +1086,20 @@ export default function HeliosPulsePortal() {
           <span className="font-mono font-bold text-[#1f7a4c]">
             {visibleGridRows.length} of {fullIntervalGridRows.length} rows
           </span>
+
+          {selectedGridRows.length > 0 && (
+            <button
+              onClick={() => setSelectedGridRows([])}
+              className={`px-2.5 py-1 rounded-full font-semibold border cursor-pointer transition ${
+                darkMode
+                  ? 'bg-purple-700 text-white border-purple-400 hover:bg-purple-600'
+                  : 'bg-[#d8b4fe] text-[#1a1917] border-[#7e22ce] hover:bg-[#c084fc]'
+              }`}
+              title="Click to clear selected rows"
+            >
+              {selectedGridRows.length} selected · Clear
+            </button>
+          )}
 
           <div className="flex items-center gap-1.5">
             <span className={`font-medium ${mutedText}`}>View</span>
@@ -1193,292 +1214,349 @@ export default function HeliosPulsePortal() {
         </div>
       </div>
 
-      {/* 18-COLUMN DATA GRID WITH UNIFIED WARM EDITORIAL STYLING */}
-      <div className={`rounded-2xl border overflow-hidden ${cardBg}`}>
-        <div className={`overflow-x-auto ${isPopOutModal ? 'max-h-[70vh]' : 'max-h-[600px]'}`}>
-          <table className="w-full border-collapse text-xs">
-            <thead className={`sticky top-0 z-20 border-b-2 ${dividerBorder} ${darkMode ? 'bg-slate-950 text-slate-300' : 'bg-[#efece4] text-[#1a1917]'}`}>
-              <tr>
-                <th
-                  onClick={() => toggleGridSort('date')}
-                  className={`p-2.5 text-left font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Date
-                </th>
-                <th className={`p-2.5 text-center font-bold border-r ${dividerBorder} whitespace-nowrap`}>
-                  Day
-                </th>
-                <th className={`p-2.5 text-right font-bold border-r ${dividerBorder} whitespace-nowrap`}>
-                  Weather<br />high / low
-                </th>
-                <th
-                  onClick={() => toggleGridSort('irradianceNum')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Daily<br />irradiance<br />(W/m²)
-                </th>
-                <th className={`p-2.5 text-right font-bold border-r ${dividerBorder} whitespace-nowrap`}>
-                  Sun<br />height<br />(°)
-                </th>
+      {/* 18-COLUMN SPREADSHEET DATA GRID */}
+      <div className="space-y-2.5">
+        <div className={`flex flex-wrap items-center justify-between gap-2 text-[11px] font-medium ${mutedText}`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded border border-[#15803d] bg-[#86efac] inline-block" />
+              M02 − M01 &gt; 0 (Net Export)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded border border-[#a16207] bg-[#fde047] inline-block" />
+              M02 − M01 ≤ 0 (Net Import)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded border border-[#7e22ce] bg-[#c084fc] inline-block" />
+              Selected Row (click any row to toggle)
+            </span>
+          </div>
+          {selectedGridRows.length > 0 && (
+            <span className={`font-semibold ${darkMode ? 'text-purple-300' : 'text-[#6b21a8]'}`}>
+              {selectedGridRows.length} {selectedGridRows.length === 1 ? 'row' : 'rows'} selected
+            </span>
+          )}
+        </div>
 
-                {/* FRAMED COLUMN 1: SUNRUN POWER */}
-                <th className="p-2 text-right font-bold bg-[#e07a16]/15 text-[#9a4d06] dark:text-amber-300 border-t-3 border-x-2 border-[#e07a16] whitespace-nowrap">
-                  <div className="flex justify-end mb-1">
-                    <select
-                      value={colFilterPower}
-                      onChange={(e) => setColFilterPower(e.target.value)}
-                      className="px-1 py-0.5 rounded border border-[#e07a16]/40 bg-white text-[10px] font-semibold text-[#1a1917]"
+        <div className={`rounded-2xl overflow-hidden border-2 ${darkMode ? 'bg-slate-900 border-slate-500 text-slate-100' : 'bg-white border-[#4a463f] text-[#1a1917] shadow-sm'}`}>
+          <div className={`overflow-x-auto ${isPopOutModal ? 'max-h-[70vh]' : 'max-h-[600px]'}`}>
+            <table className="w-full border-collapse text-xs">
+              <thead className={`sticky top-0 z-20 border-b-2 ${darkMode ? 'border-slate-400 bg-slate-900 text-slate-100' : 'border-[#4a463f] bg-[#e5dfd3] text-[#1a1917]'}`}>
+                <tr>
+                  <th
+                    onClick={() => toggleGridSort('date')}
+                    className={`p-2.5 text-left font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Date
+                  </th>
+                  <th className={`p-2.5 text-center font-bold border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                    Day
+                  </th>
+                  <th className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                    Weather<br />high / low
+                  </th>
+                  <th
+                    onClick={() => toggleGridSort('irradianceNum')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Daily<br />irradiance<br />(W/m²)
+                  </th>
+                  <th className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                    Sun<br />height<br />(°)
+                  </th>
+
+                  {/* FRAMED COLUMN 1: SUNRUN POWER */}
+                  <th
+                    className={`p-2 text-right font-bold border-t-3 border-x-2 border-[#c25e00] whitespace-nowrap ${
+                      darkMode ? 'bg-amber-800 text-amber-50' : 'bg-[#fdba74] text-[#1a1917]'
+                    }`}
+                  >
+                    <div className="flex justify-end mb-1">
+                      <select
+                        value={colFilterPower}
+                        onChange={(e) => setColFilterPower(e.target.value)}
+                        className="px-1 py-0.5 rounded border border-[#9a3412]/50 bg-white text-[10px] font-semibold text-[#1a1917]"
+                      >
+                        <option value="No">No</option>
+                        <option value="High">High</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                    <div onClick={() => toggleGridSort('solar_kwh')} className="cursor-pointer">
+                      SunRun<br />Power<br />(kWh)
+                    </div>
+                  </th>
+
+                  {/* FRAMED COLUMN 2: DELIVERED / M01 */}
+                  <th
+                    className={`p-2 text-right font-bold border-t-3 border-x-2 border-[#475569] whitespace-nowrap ${
+                      darkMode ? 'bg-slate-700 text-white' : 'bg-[#cbd5e1] text-[#0f172a]'
+                    }`}
+                  >
+                    <div className="flex justify-end mb-1">
+                      <select
+                        value={colFilterM01}
+                        onChange={(e) => setColFilterM01(e.target.value)}
+                        className="px-1 py-0.5 rounded border border-[#475569]/50 bg-white text-[10px] font-semibold text-[#1a1917]"
+                      >
+                        <option value="No">No</option>
+                        <option value="High">High</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                    <div onClick={() => toggleGridSort('m01_import_kwh')} className="cursor-pointer">
+                      Delivered /<br />M01
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => toggleGridSort('running_m01')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Running<br />M01
+                  </th>
+
+                  {/* FRAMED COLUMN 3: RECEIVED / M02 */}
+                  <th
+                    className={`p-2 text-right font-bold border-t-3 border-x-2 border-[#15803d] whitespace-nowrap ${
+                      darkMode ? 'bg-emerald-800 text-emerald-50' : 'bg-[#86efac] text-[#052e16]'
+                    }`}
+                  >
+                    <div className="flex justify-end mb-1">
+                      <select
+                        value={colFilterM02}
+                        onChange={(e) => setColFilterM02(e.target.value)}
+                        className="px-1 py-0.5 rounded border border-[#15803d]/50 bg-white text-[10px] font-semibold text-[#1a1917]"
+                      >
+                        <option value="No">No</option>
+                        <option value="High">High</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                    <div onClick={() => toggleGridSort('m02_export_kwh')} className="cursor-pointer">
+                      Received /<br />M02
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => toggleGridSort('running_m02')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Running<br />M02
+                  </th>
+
+                  {/* M01 - M02 DIFF (NET) */}
+                  <th className={`p-2 text-right font-bold border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                    <div className="flex justify-end mb-1">
+                      <select
+                        value={colFilterDiff}
+                        onChange={(e) => setColFilterDiff(e.target.value)}
+                        className="px-1 py-0.5 rounded border border-[#6b665c] bg-white text-[10px] font-semibold text-[#1a1917]"
+                      >
+                        <option value="No">No</option>
+                        <option value="Pos">+ Imp</option>
+                        <option value="Neg">- Exp</option>
+                      </select>
+                    </div>
+                    <div onClick={() => toggleGridSort('m01_m02_diff')} className="cursor-pointer">
+                      M01 −<br />M02<br />Diff<br />(Net)
+                    </div>
+                  </th>
+
+                  {/* FRAMED COLUMN 4: EDC */}
+                  <th
+                    className={`p-2 text-right font-bold border-t-3 border-x-2 border-[#9a3412] whitespace-nowrap ${
+                      darkMode ? 'bg-orange-800 text-orange-50' : 'bg-[#fcd34d] text-[#1a1917]'
+                    }`}
+                  >
+                    <div className="flex justify-end mb-1">
+                      <select
+                        value={colFilterEdc}
+                        onChange={(e) => setColFilterEdc(e.target.value)}
+                        className="px-1 py-0.5 rounded border border-[#9a3412]/50 bg-white text-[10px] font-semibold text-[#1a1917]"
+                      >
+                        <option value="No">No</option>
+                        <option value="High">High</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                    <div onClick={() => toggleGridSort('edc_kwh')} className="cursor-pointer">
+                      EDC
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => toggleGridSort('running_edc')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Running<br />EDC
+                  </th>
+
+                  <th
+                    onClick={() => toggleGridSort('import_cost')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Import<br />Cost
+                  </th>
+                  <th
+                    onClick={() => toggleGridSort('export_value')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Export<br />Value
+                  </th>
+                  <th
+                    onClick={() => toggleGridSort('net_cost')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Net<br />Cost
+                  </th>
+                  <th
+                    onClick={() => toggleGridSort('running_net_cost')}
+                    className={`p-2.5 text-right font-bold border-r-2 ${sheetGridBorder} cursor-pointer whitespace-nowrap`}
+                  >
+                    Running<br />Net Cost
+                  </th>
+                  <th className="p-2.5 text-left font-bold min-w-[140px]">Notes</th>
+                </tr>
+              </thead>
+
+              <tbody className={`divide-y-2 ${sheetGridBorder}`}>
+                {visibleGridRows.map((row) => {
+                  const isM02MinusM01Positive = row.m02_export_kwh - row.m01_import_kwh > 0;
+                  const isSelected = selectedGridRows.includes(row.date);
+                  const rowBgClass = isSelected
+                    ? darkMode
+                      ? 'bg-purple-700 text-white hover:bg-purple-600'
+                      : 'bg-[#d8b4fe] text-[#1a1917] hover:bg-[#c084fc]/85'
+                    : isM02MinusM01Positive
+                    ? darkMode
+                      ? 'bg-emerald-900/75 text-emerald-50 hover:bg-emerald-800/80'
+                      : 'bg-[#bbf7d0] text-[#1a1917] hover:bg-[#86efac]/85'
+                    : darkMode
+                    ? 'bg-amber-900/65 text-amber-50 hover:bg-amber-800/75'
+                    : 'bg-[#fef08a] text-[#1a1917] hover:bg-[#fde047]/80';
+
+                  const greenText = darkMode ? 'text-emerald-200' : 'text-[#14532d]';
+                  const redText = darkMode ? 'text-rose-200' : 'text-[#991b1b]';
+                  const solarText = darkMode ? 'text-amber-200' : 'text-[#9a3412]';
+                  const subText = darkMode ? 'text-slate-200/80' : 'text-[#374151]';
+
+                  return (
+                    <tr
+                      key={row.date}
+                      onClick={() => toggleSelectGridRow(row.date)}
+                      aria-selected={isSelected}
+                      className={`${rowBgClass} border-b-2 ${sheetGridBorder} cursor-pointer transition-colors`}
                     >
-                      <option value="No">No</option>
-                      <option value="High">High</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                  <div onClick={() => toggleGridSort('solar_kwh')} className="cursor-pointer">
-                    SunRun<br />Power<br />(kWh)
-                  </div>
-                </th>
+                      <td className={`p-2.5 font-mono font-semibold whitespace-nowrap border-r-2 ${sheetGridBorder}`}>
+                        {row.date}
+                      </td>
+                      <td className={`p-2.5 text-center font-semibold border-r-2 ${sheetGridBorder}`}>
+                        {row.dayName}
+                      </td>
+                      <td className={`p-2 text-right border-r-2 ${sheetGridBorder} leading-tight whitespace-nowrap`}>
+                        <div className="font-mono font-semibold">
+                          {row.tempHigh}° / {row.tempLow}°F
+                        </div>
+                        <div className={`text-[10px] font-medium ${subText}`}>{row.weatherCond}</div>
+                      </td>
+                      <td className={`p-2.5 text-right font-mono font-medium border-r-2 ${sheetGridBorder}`}>
+                        {row.irradianceNum}
+                      </td>
+                      <td className={`p-2.5 text-right font-mono font-medium border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                        {row.sunHeight}
+                      </td>
 
-                {/* FRAMED COLUMN 2: DELIVERED / M01 */}
-                <th className="p-2 text-right font-bold bg-[#687076]/15 text-[#374151] dark:text-slate-200 border-t-3 border-x-2 border-[#687076] whitespace-nowrap">
-                  <div className="flex justify-end mb-1">
-                    <select
-                      value={colFilterM01}
-                      onChange={(e) => setColFilterM01(e.target.value)}
-                      className="px-1 py-0.5 rounded border border-[#687076]/40 bg-white text-[10px] font-semibold text-[#1a1917]"
-                    >
-                      <option value="No">No</option>
-                      <option value="High">High</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                  <div onClick={() => toggleGridSort('m01_import_kwh')} className="cursor-pointer">
-                    Delivered /<br />M01
-                  </div>
-                </th>
+                      {/* SUNRUN POWER */}
+                      <td className={`p-2.5 text-right font-mono font-bold ${solarText} border-x-2 border-[#c25e00]`}>
+                        {row.solar_kwh.toFixed(1)}
+                      </td>
 
-                <th
-                  onClick={() => toggleGridSort('running_m01')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Running<br />M01
-                </th>
+                      {/* DELIVERED / M01 */}
+                      <td className="p-2.5 text-right font-mono font-bold border-x-2 border-[#475569]">
+                        {row.m01_import_kwh.toFixed(1)}
+                      </td>
 
-                {/* FRAMED COLUMN 3: RECEIVED / M02 */}
-                <th className="p-2 text-right font-bold bg-[#1f7a4c]/15 text-[#1f7a4c] border-t-3 border-x-2 border-[#1f7a4c] whitespace-nowrap">
-                  <div className="flex justify-end mb-1">
-                    <select
-                      value={colFilterM02}
-                      onChange={(e) => setColFilterM02(e.target.value)}
-                      className="px-1 py-0.5 rounded border border-[#1f7a4c]/40 bg-white text-[10px] font-semibold text-[#1a1917]"
-                    >
-                      <option value="No">No</option>
-                      <option value="High">High</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                  <div onClick={() => toggleGridSort('m02_export_kwh')} className="cursor-pointer">
-                    Received /<br />M02
-                  </div>
-                </th>
+                      {/* RUNNING M01 */}
+                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                        {row.running_m01.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </td>
 
-                <th
-                  onClick={() => toggleGridSort('running_m02')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Running<br />M02
-                </th>
+                      {/* RECEIVED / M02 */}
+                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-x-2 border-[#15803d]`}>
+                        {row.m02_export_kwh.toFixed(1)}
+                      </td>
 
-                {/* M01 - M02 DIFF (NET) */}
-                <th className={`p-2 text-right font-bold border-r ${dividerBorder} whitespace-nowrap`}>
-                  <div className="flex justify-end mb-1">
-                    <select
-                      value={colFilterDiff}
-                      onChange={(e) => setColFilterDiff(e.target.value)}
-                      className="px-1 py-0.5 rounded border border-[#dcd8ce] bg-white text-[10px] font-semibold text-[#1a1917]"
-                    >
-                      <option value="No">No</option>
-                      <option value="Pos">+ Imp</option>
-                      <option value="Neg">- Exp</option>
-                    </select>
-                  </div>
-                  <div onClick={() => toggleGridSort('m01_m02_diff')} className="cursor-pointer">
-                    M01 −<br />M02<br />Diff<br />(Net)
-                  </div>
-                </th>
+                      {/* RUNNING M02 */}
+                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                        {row.running_m02.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </td>
 
-                {/* FRAMED COLUMN 4: EDC */}
-                <th className="p-2 text-right font-bold bg-[#b45309]/12 text-[#78350f] dark:text-amber-200 border-t-3 border-x-2 border-[#b45309] whitespace-nowrap">
-                  <div className="flex justify-end mb-1">
-                    <select
-                      value={colFilterEdc}
-                      onChange={(e) => setColFilterEdc(e.target.value)}
-                      className="px-1 py-0.5 rounded border border-[#b45309]/40 bg-white text-[10px] font-semibold text-[#1a1917]"
-                    >
-                      <option value="No">No</option>
-                      <option value="High">High</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                  <div onClick={() => toggleGridSort('edc_kwh')} className="cursor-pointer">
-                    EDC
-                  </div>
-                </th>
-
-                <th
-                  onClick={() => toggleGridSort('running_edc')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Running<br />EDC
-                </th>
-
-                <th
-                  onClick={() => toggleGridSort('import_cost')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Import<br />Cost
-                </th>
-                <th
-                  onClick={() => toggleGridSort('export_value')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Export<br />Value
-                </th>
-                <th
-                  onClick={() => toggleGridSort('net_cost')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Net<br />Cost
-                </th>
-                <th
-                  onClick={() => toggleGridSort('running_net_cost')}
-                  className={`p-2.5 text-right font-bold border-r ${dividerBorder} cursor-pointer whitespace-nowrap`}
-                >
-                  Running<br />Net Cost
-                </th>
-                <th className="p-2.5 text-left font-bold min-w-[140px]">Notes</th>
-              </tr>
-            </thead>
-
-            <tbody className={`divide-y ${dividerBorder}`}>
-              {visibleGridRows.map((row) => {
-                const baseRowBg = row.isTempPlaceholder
-                  ? darkMode
-                    ? 'bg-amber-950/20'
-                    : 'bg-[#f5efe2]'
-                  : darkMode
-                  ? 'hover:bg-slate-800/40'
-                  : 'hover:bg-[#faf8f4]';
-                return (
-                  <tr key={row.date} className={`${baseRowBg} transition`}>
-                    <td className={`p-2.5 font-mono font-medium whitespace-nowrap border-r ${dividerBorder}`}>
-                      {row.date}
-                    </td>
-                    <td className={`p-2.5 text-center font-medium border-r ${dividerBorder}`}>
-                      {row.dayName}
-                    </td>
-                    <td className={`p-2 text-right border-r ${dividerBorder} leading-tight whitespace-nowrap`}>
-                      <div className="font-mono font-semibold">
-                        {row.tempHigh}° / {row.tempLow}°F
-                      </div>
-                      <div className={`text-[10px] font-medium ${mutedText}`}>{row.weatherCond}</div>
-                    </td>
-                    <td className={`p-2.5 text-right font-mono border-r ${dividerBorder}`}>
-                      {row.irradianceNum}
-                    </td>
-                    <td className={`p-2.5 text-right font-mono border-r ${dividerBorder} whitespace-nowrap`}>
-                      {row.sunHeight}
-                    </td>
-
-                    {/* SUNRUN POWER */}
-                    <td className="p-2.5 text-right font-mono font-bold text-[#e07a16] bg-[#e07a16]/8 border-x-2 border-[#e07a16]">
-                      {row.solar_kwh.toFixed(1)}
-                    </td>
-
-                    {/* DELIVERED / M01 */}
-                    <td className="p-2.5 text-right font-mono font-semibold bg-[#687076]/8 border-x-2 border-[#687076]">
-                      {row.m01_import_kwh.toFixed(1)}
-                    </td>
-
-                    {/* RUNNING M01 */}
-                    <td className={`p-2.5 text-right font-mono font-bold text-[#1f7a4c] border-r ${dividerBorder}`}>
-                      {row.running_m01.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                    </td>
-
-                    {/* RECEIVED / M02 */}
-                    <td className="p-2.5 text-right font-mono font-bold text-[#1f7a4c] bg-[#1f7a4c]/8 border-x-2 border-[#1f7a4c]">
-                      {row.m02_export_kwh.toFixed(1)}
-                    </td>
-
-                    {/* RUNNING M02 */}
-                    <td className={`p-2.5 text-right font-mono font-bold text-[#1f7a4c] border-r ${dividerBorder}`}>
-                      {row.running_m02.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                    </td>
-
-                    {/* M01 - M02 DIFF (NET) */}
-                    <td
-                      className={`p-2.5 text-right font-mono font-semibold border-r ${dividerBorder} ${
-                        row.m01_m02_diff >= 0 ? 'text-[#b91c1c]' : 'text-[#1f7a4c]'
-                      }`}
-                    >
-                      {row.m01_m02_diff >= 0 ? `+${row.m01_m02_diff.toFixed(1)}` : row.m01_m02_diff.toFixed(1)}
-                    </td>
-
-                    {/* EDC */}
-                    <td className="p-2.5 text-right font-mono font-bold bg-[#b45309]/8 border-x-2 border-[#b45309]">
-                      {row.edc_kwh.toFixed(1)}
-                    </td>
-
-                    {/* RUNNING EDC */}
-                    <td className={`p-2.5 text-right font-mono font-bold text-[#1f7a4c] border-r ${dividerBorder}`}>
-                      {row.running_edc.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                    </td>
-
-                    {/* IMPORT COST */}
-                    <td className={`p-2.5 text-right font-mono text-[#b91c1c] border-r ${dividerBorder}`}>
-                      ${row.import_cost.toFixed(2)}
-                    </td>
-
-                    {/* EXPORT VALUE */}
-                    <td className={`p-2.5 text-right font-mono text-[#1f7a4c] border-r ${dividerBorder}`}>
-                      ${row.export_value.toFixed(2)}
-                    </td>
-
-                    {/* NET COST */}
-                    <td
-                      className={`p-2.5 text-right font-mono font-semibold border-r ${dividerBorder} ${
-                        row.net_cost >= 0 ? 'text-[#b91c1c]' : 'text-[#1f7a4c]'
-                      }`}
-                    >
-                      {row.net_cost >= 0 ? `+${row.net_cost.toFixed(2)}` : row.net_cost.toFixed(2)}
-                    </td>
-
-                    {/* RUNNING NET COST */}
-                    <td className={`p-2.5 text-right font-mono font-bold text-[#1f7a4c] border-r ${dividerBorder} whitespace-nowrap`}>
-                      ${row.running_net_cost.toFixed(2)}
-                    </td>
-
-                    {/* NOTES */}
-                    <td className="p-1.5">
-                      <input
-                        type="text"
-                        placeholder="Add note"
-                        value={gridNotes[row.date] ?? row.note ?? ''}
-                        onChange={(e) =>
-                          setGridNotes((prev) => ({ ...prev, [row.date]: e.target.value }))
-                        }
-                        className={`w-full px-2.5 py-1 rounded-lg border text-xs ${
-                          darkMode
-                            ? 'bg-slate-950 border-slate-800 text-slate-200'
-                            : 'bg-[#faf8f4] border-[#e6e2d8] text-[#1a1917] placeholder:text-[#9c978c]'
+                      {/* M01 - M02 DIFF (NET) */}
+                      <td
+                        className={`p-2.5 text-right font-mono font-bold border-r-2 ${sheetGridBorder} ${
+                          row.m01_m02_diff >= 0 ? redText : greenText
                         }`}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      >
+                        {row.m01_m02_diff >= 0 ? `+${row.m01_m02_diff.toFixed(1)}` : row.m01_m02_diff.toFixed(1)}
+                      </td>
+
+                      {/* EDC */}
+                      <td className="p-2.5 text-right font-mono font-bold border-x-2 border-[#9a3412]">
+                        {row.edc_kwh.toFixed(1)}
+                      </td>
+
+                      {/* RUNNING EDC */}
+                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                        {row.running_edc.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                      </td>
+
+                      {/* IMPORT COST */}
+                      <td className={`p-2.5 text-right font-mono font-semibold ${redText} border-r-2 ${sheetGridBorder}`}>
+                        ${row.import_cost.toFixed(2)}
+                      </td>
+
+                      {/* EXPORT VALUE */}
+                      <td className={`p-2.5 text-right font-mono font-semibold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                        ${row.export_value.toFixed(2)}
+                      </td>
+
+                      {/* NET COST */}
+                      <td
+                        className={`p-2.5 text-right font-mono font-bold border-r-2 ${sheetGridBorder} ${
+                          row.net_cost >= 0 ? redText : greenText
+                        }`}
+                      >
+                        {row.net_cost >= 0 ? `+${row.net_cost.toFixed(2)}` : row.net_cost.toFixed(2)}
+                      </td>
+
+                      {/* RUNNING NET COST */}
+                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                        ${row.running_net_cost.toFixed(2)}
+                      </td>
+
+                      {/* NOTES */}
+                      <td className="p-1.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          placeholder="Add note"
+                          value={gridNotes[row.date] ?? row.note ?? ''}
+                          onChange={(e) =>
+                            setGridNotes((prev) => ({ ...prev, [row.date]: e.target.value }))
+                          }
+                          className={`w-full px-2.5 py-1 rounded border text-xs ${
+                            darkMode
+                              ? 'bg-slate-950/90 border-slate-600 text-slate-100'
+                              : 'bg-white/90 border-[#6b665c] text-[#1a1917] placeholder:text-[#6b675e]'
+                          }`}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
