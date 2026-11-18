@@ -556,10 +556,26 @@ export default function HeliosPulsePortal() {
   }, [solarRows, spanFilter]);
 
   // Handlers
-  const triggerSyncPipeline = () => {
+  const triggerSyncPipeline = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
     setActiveSyncStep(1);
+
+    try {
+      const resp = await fetch('/heliospulse-portal/api/sync-csv');
+      if (resp.ok) {
+        const fresh = await resp.json();
+        if (Array.isArray(fresh.daily_rows)) {
+          setSolarRows(fresh.daily_rows);
+          if (fresh.metadata?.latest_reconciled_date) {
+            setSelectedDistDate(fresh.metadata.latest_reconciled_date);
+          }
+        }
+      }
+    } catch {
+      // Static GitHub Pages environment uses build-time telemetryData.json
+    }
+
     let step = 1;
     const timer = setInterval(() => {
       step += 1;
@@ -580,7 +596,7 @@ export default function HeliosPulsePortal() {
           ...prev,
         ]);
       }
-    }, 450);
+    }, 350);
   };
 
   const handleCsvFileUpload = async (e, type) => {
