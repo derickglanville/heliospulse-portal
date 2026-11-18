@@ -163,11 +163,16 @@ export default function HeliosPulsePortal() {
       .sort((a, b) => (a.date > b.date ? 1 : -1));
   }, [solarRows]);
 
-  // Build the 106-row Interval Data Grid dataset
+  // Build the Interval Data Grid dataset (reconciled rows + temporary NYSEG placeholders)
   const fullIntervalGridRows = useMemo(() => {
-    const oct31 = solarRows.find((r) => r.date === '2026-10-31');
+    const TEMP_PLACEHOLDER_SOURCES = {
+      '2026-10-29': '2026-10-31',
+      '2026-10-30': '2026-10-31',
+      '2026-11-13': '2026-11-12',
+    };
+    const rowsByDate = new Map(solarRows.map((r) => [r.date, r]));
     const candidates = solarRows
-      .filter((r) => r.status === 'RECONCILED' || r.date === '2026-10-29' || r.date === '2026-10-30')
+      .filter((r) => r.status === 'RECONCILED' || Boolean(TEMP_PLACEHOLDER_SOURCES[r.date]))
       .sort((a, b) => (a.date > b.date ? 1 : -1));
 
     const RATE = 0.24;
@@ -176,8 +181,10 @@ export default function HeliosPulsePortal() {
     let runEdc = 0;
 
     const computedChrono = candidates.map((r) => {
-      const isTempPlaceholder = r.date === '2026-10-29' || r.date === '2026-10-30';
-      const sourceNyseg = isTempPlaceholder && oct31 ? oct31 : r;
+      const fallbackDate = r.status !== 'RECONCILED' ? TEMP_PLACEHOLDER_SOURCES[r.date] : null;
+      const fallbackRow = fallbackDate ? rowsByDate.get(fallbackDate) : null;
+      const isTempPlaceholder = Boolean(fallbackDate && fallbackRow);
+      const sourceNyseg = isTempPlaceholder ? fallbackRow : r;
 
       const solar = r.solar_kwh || 0;
       const m01 = sourceNyseg.m01_import_kwh || 0;
@@ -210,6 +217,10 @@ export default function HeliosPulsePortal() {
       return {
         ...r,
         isTempPlaceholder,
+        tempSourceDate: isTempPlaceholder ? fallbackDate : null,
+        note: isTempPlaceholder
+          ? `Temporary NYSEG record (copied from ${fallbackDate} while NYSEG intervals are pending)`
+          : r.note,
         dayName,
         tempHigh: tHigh,
         tempLow: tLow,
@@ -1167,7 +1178,7 @@ export default function HeliosPulsePortal() {
       <div className={`p-4 rounded-xl text-xs sm:text-[13px] leading-relaxed ${calloutBg}`}>
         <strong className="font-semibold">Temporary NYSEG records:</strong>{' '}
         <span className={mutedText}>
-          October 29 and 30 are display-only copies of October 31 while NYSEG has no hourly intervals for those dates. They are excluded from official reconciliation, credit-bank, and forecast calculations; visible grid-span totals include the placeholders.
+          October 29 and 30 are display-only copies of October 31, and November 13 is a display-only copy of November 12 while NYSEG has no hourly intervals for those dates. They are excluded from official reconciliation, credit-bank, and forecast calculations; visible grid-span totals include the placeholders.
         </span>
       </div>
 
@@ -1449,7 +1460,19 @@ export default function HeliosPulsePortal() {
                       className={`${rowBgClass} border-b-2 ${sheetGridBorder} cursor-pointer transition-colors`}
                     >
                       <td className={`p-2.5 font-mono font-semibold whitespace-nowrap border-r-2 ${sheetGridBorder}`}>
-                        {row.date}
+                        <div>{row.date}</div>
+                        {row.isTempPlaceholder && (
+                          <span
+                            className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide ${
+                              darkMode
+                                ? 'bg-amber-950/90 text-amber-200 border border-amber-500/60'
+                                : 'bg-[#fff7ed] text-[#9a3412] border border-[#c2410c]'
+                            }`}
+                            title={`Temporary NYSEG values copied from ${row.tempSourceDate}`}
+                          >
+                            Temp · {row.tempSourceDate?.slice(5)}
+                          </span>
+                        )}
                       </td>
                       <td className={`p-2.5 text-center font-semibold border-r-2 ${sheetGridBorder}`}>
                         {row.dayName}
