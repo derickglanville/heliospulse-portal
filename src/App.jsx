@@ -5,7 +5,8 @@ import {
   Download, Eye, Layers, Moon, SunMedium,
   Database, Calculator, X,
   Check, Sparkles, Plug, FolderOpen, Upload,
-  ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home, Minimize2
+  ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home, Minimize2,
+  Mail, Bell
 } from 'lucide-react';
 import telemetryData from './data/telemetryData.json';
 import solarHomeSideImg from './assets/solar-home-side.png';
@@ -130,7 +131,65 @@ function getSolarAstronomyForDate(dateStr, solarKwh, fallbackIrrLabel, rowIrrWm2
   };
 }
 
-export default function HeliosPulsePortal() {
+function postIssueToLocalServer(title, message, source = 'HeliosPulse UI', details = '') {
+  try {
+    fetch('/heliospulse-portal/api/report-issue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, message, source, details }),
+    }).catch(() => {});
+  } catch {
+    // Static build environments have no local backend
+  }
+}
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMessage: error?.message || 'Unexpected application error' };
+  }
+
+  componentDidCatch(error, info) {
+    postIssueToLocalServer(
+      'HeliosPulse Portal Render Error',
+      error?.message || 'React ErrorBoundary triggered',
+      'AppErrorBoundary',
+      info?.componentStack || ''
+    );
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#f6f4ef] text-[#1a1917] flex items-center justify-center p-6">
+          <div className="max-w-lg w-full rounded-2xl border-2 border-[#b91c1c] bg-white p-6 space-y-3 shadow-sm">
+            <div className="flex items-center gap-2 text-[#b91c1c] font-bold text-base">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Application Issue Detected</span>
+            </div>
+            <p className="text-sm leading-relaxed">{this.state.errorMessage}</p>
+            <p className="text-xs text-[#6b675e]">
+              An automated alert email has been dispatched to dglanville@gmail.com (when connected to local sync server).
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 rounded-full bg-[#1a1917] text-white text-xs font-semibold cursor-pointer"
+            >
+              Reload Portal
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function HeliosPulsePortalInner() {
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('savings');
   const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
@@ -140,6 +199,10 @@ export default function HeliosPulsePortal() {
 
   const [solarRows, setSolarRows] = useState(INITIAL_SOLAR_DAILY);
   const [moreBillsData, setMoreBillsData] = useState(telemetryData.more_bills);
+  const [telemetryAlerts, setTelemetryAlerts] = useState(telemetryData.alerts || []);
+  const [notificationStatus, setNotificationStatus] = useState(telemetryData.notification_status || null);
+  const [appRuntimeIssues, setAppRuntimeIssues] = useState([]);
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
   const [lastFolderEvent, setLastFolderEvent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
@@ -588,7 +651,84 @@ export default function HeliosPulsePortal() {
     return reconciled.slice(0, count).reverse();
   }, [solarRows, spanFilter]);
 
-  // Handlers
+  // Handlers & Anomaly / Email Alert Helpers
+  const reportAppIssue = (title, message, source = 'HeliosPulse UI', details = '') => {
+    const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const id = `${title}::${message}`;
+    setAppRuntimeIssues((prev) => {
+      if (prev.some((p) => p.id === id)) return prev;
+      return [
+        {
+          id,
+          code: 'APP_RUNTIME_ISSUE',
+          severity: 'error',
+          title,
+          message: `${message} (${nowIso})`,
+          dates: [],
+          source,
+        },
+        ...prev,
+      ].slice(0, 10);
+    });
+    postIssueToLocalServer(title, message, source, details);
+  };
+
+  const applyFreshTelemetrySnapshot = (fresh, eventSource = 'sync') => {
+    if (!fresh) return;
+    if (Array.isArray(fresh.daily_rows)) {
+      setSolarRows(fresh.daily_rows);
+      if (fresh.metadata?.latest_reconciled_date) {
+        setSelectedDistDate(fresh.metadata.latest_reconciled_date);
+      }
+    }
+    if (Array.isArray(fresh.alerts)) {
+      setTelemetryAlerts(fresh.alerts);
+    }
+    if (fresh.notification_status) {
+      setNotificationStatus(fresh.notification_status);
+    }
+    if (fresh.more_bills) {
+      setMoreBillsData(fresh.more_bills);
+      setLastFolderEvent(
+        `Scanned More Bills folder at ${new Date().toLocaleTimeString()} (${eventSource}) — ${fresh.more_bills.total_pdf_files} PDF bills analyzed.`
+      );
+    }
+  };
+
+  const combinedAlerts = useMemo(() => {
+    const merged = [...appRuntimeIssues, ...(telemetryAlerts || [])];
+    const hasCode = (c) => merged.some((a) => a.code === c);
+
+    // Live browser-side anomaly verification (covers CSV upload / payload ingest updates)
+    const liveExportExceeds = solarRows
+      .filter((r) => r.status === 'RECONCILED' && (r.m02_export_kwh || 0) > (r.solar_kwh || 0) + 0.5)
+      .map((r) => r.date);
+    if (liveExportExceeds.length > 0 && !hasCode('EXPORT_EXCEEDS_SOLAR')) {
+      merged.push({
+        code: 'EXPORT_EXCEEDS_SOLAR',
+        severity: 'error',
+        title: 'NYSEG M02 export exceeds SunRun solar production',
+        message: `Physical bound check (M02 <= Solar + 0.5 kWh) failed on ${liveExportExceeds.join(', ')}.`,
+        dates: liveExportExceeds,
+      });
+    }
+
+    const liveMissingNyseg = solarRows
+      .filter((r) => r.status === 'SUNRUN_ONLY' && r.date >= '2026-07-31')
+      .map((r) => r.date);
+    if (liveMissingNyseg.length > 0 && !hasCode('MISSING_NYSEG_INTERVALS')) {
+      merged.push({
+        code: 'MISSING_NYSEG_INTERVALS',
+        severity: 'warning',
+        title: `NYSEG hourly intervals missing for ${liveMissingNyseg.length} post-export date(s)`,
+        message: `Missing NYSEG intervals for: ${liveMissingNyseg.join(', ')}.`,
+        dates: liveMissingNyseg,
+      });
+    }
+
+    return merged;
+  }, [appRuntimeIssues, telemetryAlerts, solarRows]);
+
   const triggerSyncPipeline = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
@@ -598,18 +738,21 @@ export default function HeliosPulsePortal() {
       const resp = await fetch('/heliospulse-portal/api/sync-csv');
       if (resp.ok) {
         const fresh = await resp.json();
-        if (Array.isArray(fresh.daily_rows)) {
-          setSolarRows(fresh.daily_rows);
-          if (fresh.metadata?.latest_reconciled_date) {
-            setSelectedDistDate(fresh.metadata.latest_reconciled_date);
-          }
-        }
-        if (fresh.more_bills) {
-          setMoreBillsData(fresh.more_bills);
+        applyFreshTelemetrySnapshot(fresh, 'manual/scheduled sync');
+        const srNew = fresh.notification_status?.new_sunrun_count || 0;
+        const nyNew = fresh.notification_status?.new_nyseg_count || 0;
+        if (srNew > 0 || nyNew > 0) {
           setLastFolderEvent(
-            `Scanned More Bills folder at ${new Date().toLocaleTimeString()} — ${fresh.more_bills.total_pdf_files} PDF bills analyzed.`
+            `New records detected (${srNew} SunRun, ${nyNew} NYSEG) — email notification sent to dglanville@gmail.com.`
           );
         }
+      } else if (resp.status >= 500) {
+        const errBody = await resp.json().catch(() => ({}));
+        reportAppIssue(
+          'CSV Sync API Error',
+          errBody.error || `HTTP ${resp.status} during telemetry sync`,
+          'triggerSyncPipeline'
+        );
       }
     } catch {
       // Static GitHub Pages environment uses build-time telemetryData.json
@@ -638,22 +781,34 @@ export default function HeliosPulsePortal() {
     }, 350);
   };
 
-  // Automatic daily 7:30 AM local sync timer + live Vite HMR folder watch listener
+  // Automatic daily 7:30 AM local sync timer, HMR folder watches, & runtime error/anomaly alerting
   useEffect(() => {
     if (import.meta.hot) {
-      const handler = (fresh) => {
-        if (Array.isArray(fresh?.daily_rows)) {
-          setSolarRows(fresh.daily_rows);
-        }
-        if (fresh?.more_bills) {
-          setMoreBillsData(fresh.more_bills);
-          setLastFolderEvent(
-            `Detected new/updated bill in More Bills folder at ${new Date().toLocaleTimeString()} — ${fresh.more_bills.total_pdf_files} PDF bills analyzed.`
-          );
-        }
-      };
-      import.meta.hot.on('nyseg-bills-updated', handler);
+      const billsHandler = (fresh) => applyFreshTelemetrySnapshot(fresh, 'More Bills watch');
+      const csvHandler = (fresh) => applyFreshTelemetrySnapshot(fresh, 'CSV watch');
+      import.meta.hot.on('nyseg-bills-updated', billsHandler);
+      import.meta.hot.on('telemetry-updated', csvHandler);
     }
+
+    const onWindowError = (event) => {
+      reportAppIssue(
+        'App Runtime Error',
+        event?.message || 'Unhandled script error',
+        'window.onerror',
+        event?.error?.stack || `${event?.filename}:${event?.lineno}`
+      );
+    };
+    const onUnhandledRejection = (event) => {
+      const reason = event?.reason;
+      reportAppIssue(
+        'Unhandled Async Error',
+        reason?.message || String(reason || 'Promise rejection'),
+        'window.onunhandledrejection',
+        reason?.stack || ''
+      );
+    };
+    window.addEventListener('error', onWindowError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
 
     const computeMsUntilNext730AM = () => {
       const now = new Date();
@@ -674,6 +829,8 @@ export default function HeliosPulsePortal() {
     }, computeMsUntilNext730AM());
 
     return () => {
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
       clearTimeout(initialTimeout);
       if (dailyInterval) clearInterval(dailyInterval);
     };
@@ -814,6 +971,7 @@ export default function HeliosPulsePortal() {
       });
     } catch (err) {
       setIngestBanner({ type: 'error', text: err.message });
+      reportAppIssue('Connector Payload Anomaly', err.message, 'handleIngestRawPayload');
     }
   };
 
@@ -1740,6 +1898,105 @@ export default function HeliosPulsePortal() {
 
           {/* MAIN CONTENT CONTAINER */}
           <main className="px-1 sm:px-2 pb-10 space-y-8">
+            {/* IN-APP ANOMALIES, ISSUES & EMAIL NOTIFICATION STATUS BAR */}
+            {(combinedAlerts.length > 0 || (notificationStatus?.recent_email_events?.length || 0) > 0) && (
+              <div
+                className={`rounded-2xl border p-4 space-y-3 ${
+                  combinedAlerts.some((a) => a.severity === 'error')
+                    ? darkMode
+                      ? 'bg-rose-950/50 border-rose-500/60 text-rose-100'
+                      : 'bg-[#fef2f2] border-[#dc2626]/50 text-[#1a1917]'
+                    : combinedAlerts.length > 0
+                    ? darkMode
+                      ? 'bg-amber-950/40 border-amber-500/50 text-amber-100'
+                      : 'bg-[#fff7ed] border-[#e07a16]/50 text-[#1a1917]'
+                    : cardBg
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {combinedAlerts.length > 0 ? (
+                      <AlertTriangle
+                        className={`w-4 h-4 shrink-0 ${
+                          combinedAlerts.some((a) => a.severity === 'error') ? 'text-[#b91c1c]' : 'text-[#e07a16]'
+                        }`}
+                      />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-[#1f7a4c]" />
+                    )}
+                    <span className="font-bold">
+                      {combinedAlerts.length > 0
+                        ? `${combinedAlerts.length} Data/App Anomaly & Issue Alert${combinedAlerts.length > 1 ? 's' : ''}`
+                        : 'All Telemetry & App Checks Healthy'}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${calloutBg}`}>
+                      <Mail className="w-3 h-3 text-[#1f7a4c]" />
+                      <span>Alerts &amp; New Records → dglanville@gmail.com</span>
+                    </span>
+                    {(notificationStatus?.new_sunrun_count > 0 || notificationStatus?.new_nyseg_count > 0) && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#1f7a4c]/15 text-[#1f7a4c]">
+                        +{notificationStatus.new_sunrun_count} SunRun · +{notificationStatus.new_nyseg_count} NYSEG added
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setAlertsExpanded((v) => !v)}
+                    className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
+                  >
+                    {alertsExpanded ? 'Hide Details' : 'View Details'}
+                  </button>
+                </div>
+
+                {/* Concise primary alert message always visible */}
+                {combinedAlerts.length > 0 && (
+                  <div className="space-y-1.5 text-xs">
+                    {(alertsExpanded ? combinedAlerts : combinedAlerts.slice(0, 2)).map((alert, idx) => (
+                      <div key={`${alert.code}-${idx}`} className="flex items-start justify-between gap-2 leading-relaxed">
+                        <div>
+                          <span
+                            className={`inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              alert.severity === 'error'
+                                ? 'bg-[#b91c1c] text-white'
+                                : 'bg-[#e07a16] text-white'
+                            }`}
+                          >
+                            {alert.severity === 'error' ? 'Issue' : 'Anomaly'}
+                          </span>
+                          <strong className="font-semibold">{alert.title}:</strong>{' '}
+                          <span className={mutedText}>{alert.message}</span>
+                        </div>
+                        {alert.code === 'APP_RUNTIME_ISSUE' && (
+                          <button
+                            onClick={() => setAppRuntimeIssues((prev) => prev.filter((i) => i.id !== alert.id))}
+                            className={`text-[11px] underline shrink-0 cursor-pointer ${mutedText}`}
+                          >
+                            Dismiss
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {alertsExpanded && notificationStatus?.recent_email_events?.length > 0 && (
+                  <div className={`pt-2 border-t text-[11px] space-y-1 ${dividerBorder}`}>
+                    <div className={`font-semibold uppercase tracking-wider text-[10px] ${mutedText}`}>
+                      Recent Email Notifications (dglanville@gmail.com)
+                    </div>
+                    {notificationStatus.recent_email_events.slice(0, 5).map((ev, idx) => (
+                      <div key={idx} className="flex flex-wrap items-center justify-between gap-2 font-mono">
+                        <span className="truncate">{ev.subject}</span>
+                        <span className={ev.status === 'sent' ? 'text-[#1f7a4c]' : 'text-[#b91c1c]'}>
+                          {ev.status === 'sent' ? `Sent ${ev.sent_at}` : `Error: ${ev.error}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
         {/* TAB 1: ENERGY DISTRIBUTION (UNIFIED SOLAR SAVINGS PALETTE & TYPOGRAPHY) */}
         {activeTab === 'distribution' && (
           <div className="space-y-6">
@@ -3217,5 +3474,13 @@ export default function HeliosPulsePortal() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function HeliosPulsePortal() {
+  return (
+    <AppErrorBoundary>
+      <HeliosPulsePortalInner />
+    </AppErrorBoundary>
   );
 }

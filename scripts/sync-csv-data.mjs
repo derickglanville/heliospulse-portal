@@ -15,6 +15,25 @@ const DEFAULT_APP_JSON = path.join(CODEX_ROOT, 'JSON', 'application_data_current
 const sunrunCsvPath = process.env.SUNRUN_CSV_PATH || DEFAULT_SUNRUN_CSV;
 const nysegCsvPath = process.env.NYSEG_CSV_PATH || DEFAULT_NYSEG_CSV;
 const outputJsonPath = path.join(projectRoot, 'src', 'data', 'telemetryData.json');
+const notifyEmailScript = path.join(__dirname, 'notify_email.py');
+const shouldSendEmail = process.env.NOTIFY_EMAIL === '1' || process.argv.includes('--notify');
+const pipelineIssues = [];
+
+// Snapshot previous telemetry before overwriting so new SunRun / NYSEG records can be detected
+let previousPayload = null;
+if (fs.existsSync(outputJsonPath)) {
+  try {
+    previousPayload = JSON.parse(fs.readFileSync(outputJsonPath, 'utf8'));
+  } catch (err) {
+    pipelineIssues.push({
+      code: 'PRIOR_JSON_CORRUPT',
+      severity: 'warning',
+      title: 'Previous telemetryData.json could not be parsed cleanly',
+      message: err.message,
+      dates: [],
+    });
+  }
+}
 
 if (!fs.existsSync(sunrunCsvPath) || !fs.existsSync(nysegCsvPath)) {
   if (fs.existsSync(outputJsonPath)) {
@@ -54,6 +73,13 @@ if (fs.existsSync(DEFAULT_APP_JSON)) {
     }
   } catch (err) {
     console.warn('[sync-csv-data] Warning: Could not parse application_data_current.json:', err.message);
+    pipelineIssues.push({
+      code: 'APP_DATA_PARSE_ERROR',
+      severity: 'error',
+      title: 'Failed to parse application_data_current.json',
+      message: err.message,
+      dates: [],
+    });
   }
 }
 
@@ -72,6 +98,13 @@ if (fs.existsSync(path.join(CODEX_ROOT, 'solar_tracker', 'monthly_bill.py'))) {
     billSummaryReport = JSON.parse(pyOut.trim());
   } catch (err) {
     console.warn('[sync-csv-data] Warning: Could not run build_bill_summary_report via python:', err.message);
+    pipelineIssues.push({
+      code: 'BILL_FORECAST_SYNC_ERROR',
+      severity: 'error',
+      title: 'Credit bank forecast / monthly_bill.py execution failed',
+      message: err.message,
+      dates: [],
+    });
   }
 }
 
@@ -87,6 +120,13 @@ if (fs.existsSync(parseBillsScript)) {
     moreBillsReport = JSON.parse(billsOut.trim());
   } catch (err) {
     console.warn('[sync-csv-data] Warning: Could not run parse_nyseg_bills.py:', err.message);
+    pipelineIssues.push({
+      code: 'BILL_PDF_PARSE_ERROR',
+      severity: 'error',
+      title: 'NYSEG More Bills PDF parser failed',
+      message: err.message,
+      dates: [],
+    });
   }
 }
 
@@ -308,6 +348,170 @@ const totalM02ExportKwh = Number(reconciledRows.reduce((acc, r) => acc + (r.m02_
 const totalEdcConsumedKwh = Number((reconciledSolarKwh + totalM01ImportKwh - totalM02ExportKwh).toFixed(3));
 const netCreditBankKwh = Number((totalM02ExportKwh - totalM01ImportKwh).toFixed(3));
 
+// --- Data Anomaly & Issue Detection ---
+const detectedAnomalies = [...pipelineIssues];
+
+const exportExceedsSolarDates = dailyRows
+  .filter((r) => r.status === 'RECONCILED' && (r.m02_export_kwh || 0) > r.solar_kwh + 0.5)
+  .map((r) => r.date);
+if (exportExceedsSolarDates.length > 0) {
+  detectedAnomalies.push({
+    code: 'EXPORT_EXCEEDS_SOLAR',
+    severity: 'error',
+    title: 'NYSEG M02 export exceeds SunRun solar production',
+    message: `Physical bound check (M02 <= Solar + 0.5 kWh) failed on ${exportExceedsSolarDates.length} date(s). Check meter clock alignment or CSV source.`,
+    dates: exportExceedsSolarDates,
+  });
+}
+
+const negativeValueDates = dailyRows
+  .filter(
+    (r) =>
+      r.solar_kwh < 0 ||
+      (r.m01_import_kwh != null && r.m01_import_kwh < 0) ||
+      (r.m02_export_kwh != null && r.m02_export_kwh < 0)
+  )
+  .map((r) => r.date);
+if (negativeValueDates.length > 0) {
+  detectedAnomalies.push({
+    code: 'NEGATIVE_TELEMETRY_VALUE',
+    severity: 'error',
+    title: 'Negative solar or smart-meter reading detected',
+    message: `One or more negative kWh values found on ${negativeValueDates.join(', ')}.`,
+    dates: negativeValueDates,
+  });
+}
+
+const missingNysegDates = dailyRows
+  .filter((r) => r.status === 'SUNRUN_ONLY' && r.date >= '2026-07-31')
+  .map((r) => r.date);
+if (missingNysegDates.length > 0) {
+  detectedAnomalies.push({
+    code: 'MISSING_NYSEG_INTERVALS',
+    severity: 'warning',
+    title: `NYSEG hourly intervals missing for ${missingNysegDates.length} post-export date(s)`,
+    message: `SunRun solar generation was recorded, but NYSEG smart-meter hourly CSV data is missing for: ${missingNysegDates.join(', ')}.`,
+    dates: missingNysegDates,
+  });
+}
+
+const partialNysegDays = dailyRows.filter((r) => r.nyseg_hours > 0 && r.nyseg_hours < 24);
+if (partialNysegDays.length > 0) {
+  detectedAnomalies.push({
+    code: 'PARTIAL_NYSEG_INTERVALS',
+    severity: 'warning',
+    title: `Partial NYSEG day (< 24 hourly intervals) on ${partialNysegDays.length} date(s)`,
+    message: partialNysegDays.map((r) => `${r.date} (${r.nyseg_hours}h)`).join(', '),
+    dates: partialNysegDays.map((r) => r.date),
+  });
+}
+
+// Rolling 7-day baseline solar underperformance check when irradiance is available
+const underperfDates = [];
+for (let i = 7; i < dailyRows.length; i += 1) {
+  const row = dailyRows[i];
+  if (row.irradiance_wm2 != null && row.irradiance_wm2 >= 650 && row.solar_kwh > 0) {
+    const prev7 = dailyRows.slice(i - 7, i).map((d) => d.solar_kwh).filter((v) => v > 0);
+    if (prev7.length >= 4) {
+      const avg7 = prev7.reduce((a, b) => a + b, 0) / prev7.length;
+      if (row.solar_kwh <= avg7 * 0.55) {
+        underperfDates.push(row.date);
+      }
+    }
+  }
+}
+if (underperfDates.length > 0) {
+  detectedAnomalies.push({
+    code: 'SOLAR_UNDERPERFORMANCE',
+    severity: 'warning',
+    title: 'Potential solar underperformance under high irradiance',
+    message: `Production dropped below 55% of 7-day rolling baseline on high-irradiance day(s): ${underperfDates.join(', ')}.`,
+    dates: underperfDates,
+  });
+}
+
+// --- New SunRun & NYSEG Record Detection ---
+const prevRowByDate = new Map(
+  (previousPayload?.daily_rows || []).map((r) => [r.date, r])
+);
+const prevBillNames = new Set(
+  (previousPayload?.more_bills?.bills || []).map((b) => b.file_name)
+);
+
+const newSunrunRecords = previousPayload
+  ? dailyRows.filter((r) => {
+      if (!(r.solar_kwh > 0)) return false;
+      const prev = prevRowByDate.get(r.date);
+      return !prev || !(prev.solar_kwh > 0);
+    })
+  : [];
+
+const newNysegRecords = previousPayload
+  ? dailyRows.filter((r) => {
+      if (r.status !== 'RECONCILED' || !(r.nyseg_hours > 0)) return false;
+      const prev = prevRowByDate.get(r.date);
+      return !prev || prev.status !== 'RECONCILED' || !(prev.nyseg_hours > 0);
+    })
+  : [];
+
+const currentBillFiles = (moreBillsReport?.bills || []).map((b) => b.file_name);
+const newBillFiles = previousPayload
+  ? currentBillFiles.filter((name) => !prevBillNames.has(name))
+  : [];
+
+let emailNotificationSummary = {
+  recipient: process.env.HELIOSPULSE_ALERT_EMAIL || 'dglanville@gmail.com',
+  should_send: shouldSendEmail,
+  unsent_anomaly_count: detectedAnomalies.filter((a) => a.severity !== 'info').length,
+  new_sunrun_count: newSunrunRecords.length,
+  new_nyseg_count: newNysegRecords.length,
+  new_bills_count: newBillFiles.length,
+  emails_dispatched: [],
+  recent_email_events: previousPayload?.notification_status?.recent_email_events || [],
+};
+
+if (fs.existsSync(notifyEmailScript)) {
+  try {
+    const notifyArgs = [notifyEmailScript, '--process-report', '-'];
+    if (shouldSendEmail) {
+      notifyArgs.push('--send');
+    }
+    const notifyPayload = {
+      anomalies: detectedAnomalies,
+      new_sunrun_records: newSunrunRecords,
+      new_nyseg_records: newNysegRecords,
+      new_bill_files: newBillFiles,
+      current_sunrun_dates: dailyRows.filter((r) => r.solar_kwh > 0).map((r) => r.date),
+      current_nyseg_dates: dailyRows.filter((r) => r.status === 'RECONCILED' && r.nyseg_hours > 0).map((r) => r.date),
+      current_bill_files: currentBillFiles,
+      daily_rows_compact: dailyRows.map((r) => ({
+        date: r.date,
+        solar_kwh: r.solar_kwh,
+        eod_meter_kwh: r.eod_meter_kwh,
+        m01_import_kwh: r.m01_import_kwh,
+        m02_export_kwh: r.m02_export_kwh,
+        nyseg_hours: r.nyseg_hours,
+        status: r.status,
+      })),
+    };
+    const notifyOut = execFileSync('python', notifyArgs, {
+      input: JSON.stringify(notifyPayload),
+      encoding: 'utf8',
+      maxBuffer: 5 * 1024 * 1024,
+    });
+    emailNotificationSummary = JSON.parse(notifyOut.trim());
+  } catch (err) {
+    console.warn('[sync-csv-data] Warning: Email notification step failed:', err.message);
+    detectedAnomalies.push({
+      code: 'EMAIL_DISPATCH_ERROR',
+      severity: 'warning',
+      title: 'Email notification dispatcher encountered an issue',
+      message: err.message,
+      dates: [],
+    });
+  }
+}
+
 const payload = {
   metadata: {
     generated_at: new Date().toISOString(),
@@ -332,6 +536,14 @@ const payload = {
     reconciled_edc_consumed_kwh: totalEdcConsumedKwh,
     cumulative_net_credit_bank_kwh: netCreditBankKwh,
   },
+  alerts: detectedAnomalies,
+  notification_status: {
+    ...emailNotificationSummary,
+    last_checked_at: new Date().toISOString(),
+    new_sunrun_dates: newSunrunRecords.map((r) => r.date),
+    new_nyseg_dates: newNysegRecords.map((r) => r.date),
+    new_bill_files: newBillFiles,
+  },
   monthly_summaries: monthlySummaries,
   credit_bank_forecast: billSummaryReport?.credit_bank_forecast || null,
   more_bills: moreBillsReport,
@@ -354,5 +566,5 @@ const payload = {
 fs.mkdirSync(path.dirname(outputJsonPath), { recursive: true });
 fs.writeFileSync(outputJsonPath, JSON.stringify(payload, null, 2), 'utf8');
 console.log(
-  `[sync-csv-data] Synced ${dailyRows.length} daily records (${reconciledRows.length} reconciled with NYSEG, ${nysegTotalHours} NYSEG hourly intervals, forecast=${Boolean(payload.credit_bank_forecast)}) -> src/data/telemetryData.json`
+  `[sync-csv-data] Synced ${dailyRows.length} daily records (${reconciledRows.length} reconciled with NYSEG, ${nysegTotalHours} NYSEG hourly intervals, anomalies=${detectedAnomalies.length}, newSR=${newSunrunRecords.length}, newNY=${newNysegRecords.length}, forecast=${Boolean(payload.credit_bank_forecast)}) -> src/data/telemetryData.json`
 );

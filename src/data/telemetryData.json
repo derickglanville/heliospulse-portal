@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-18T16:03:19.643Z",
+    "generated_at": "2026-11-18T17:12:50.376Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -21,6 +21,54 @@
     "cumulative_m02_export_kwh": 3358.709,
     "reconciled_edc_consumed_kwh": 3108.047,
     "cumulative_net_credit_bank_kwh": 1558.692
+  },
+  "alerts": [
+    {
+      "code": "MISSING_NYSEG_INTERVALS",
+      "severity": "warning",
+      "title": "NYSEG hourly intervals missing for 3 post-export date(s)",
+      "message": "SunRun solar generation was recorded, but NYSEG smart-meter hourly CSV data is missing for: 2026-10-29, 2026-10-30, 2026-11-13.",
+      "dates": [
+        "2026-10-29",
+        "2026-10-30",
+        "2026-11-13"
+      ]
+    },
+    {
+      "code": "SOLAR_UNDERPERFORMANCE",
+      "severity": "warning",
+      "title": "Potential solar underperformance under high irradiance",
+      "message": "Production dropped below 55% of 7-day rolling baseline on high-irradiance day(s): 2026-07-18, 2026-07-21, 2026-07-28, 2026-08-20, 2026-08-27.",
+      "dates": [
+        "2026-07-18",
+        "2026-07-21",
+        "2026-07-28",
+        "2026-08-20",
+        "2026-08-27"
+      ]
+    }
+  ],
+  "notification_status": {
+    "recipient": "dglanville@gmail.com",
+    "should_send": false,
+    "unsent_anomaly_count": 0,
+    "new_sunrun_count": 0,
+    "new_nyseg_count": 0,
+    "new_bills_count": 0,
+    "emails_dispatched": [],
+    "recent_email_events": [
+      {
+        "sent_at": "2026-11-18T12:11:41",
+        "recipient": "dglanville@gmail.com",
+        "subject": "[HeliosPulse Alert] 2 Data/App Anomaly & Issue(s) Detected",
+        "status": "sent",
+        "category": "anomaly_alert"
+      }
+    ],
+    "last_checked_at": "2026-11-18T17:12:50.379Z",
+    "new_sunrun_dates": [],
+    "new_nyseg_dates": [],
+    "new_bill_files": []
   },
   "monthly_summaries": [
     {
