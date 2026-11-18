@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Sun, Zap, Activity, ShieldCheck, RefreshCw,
   FileText, AlertTriangle, CheckCircle2,
@@ -78,11 +78,16 @@ const TOP_MENU_ITEMS = [
 ];
 
 const AI_SUGGESTED_QUESTIONS = [
-  'How is my NYSEG credit bank?',
+  'How is my NYSEG credit bank & winter forecast?',
   'What will my next NYSEG bill be?',
-  'Explain monthly CSV totals',
-  'How much solar energy has my system produced?',
-  'Which days had net energy exports (M02 > M01)?',
+  'Summarize my NYSEG monthly bills & savings',
+  'What anomalies or data issues are currently detected?',
+  'Explain my daily energy distribution & latest grid balance',
+  'Compare monthly CSV production & grid exchange',
+  'How much have I saved vs buying all power at $0.24/kWh?',
+  'Which days were net export (green) vs net import (yellow)?',
+  'What were my best and lowest solar production days?',
+  'What is the status of my CSV sync, schedule & system?',
 ];
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -203,6 +208,21 @@ function HeliosPulsePortalInner() {
   const [notificationStatus, setNotificationStatus] = useState(telemetryData.notification_status || null);
   const [appRuntimeIssues, setAppRuntimeIssues] = useState([]);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
+  const [aiHoverOpen, setAiHoverOpen] = useState(false);
+  const aiHoverCloseTimerRef = useRef(null);
+  const openAiHoverMenu = () => {
+    if (aiHoverCloseTimerRef.current) {
+      clearTimeout(aiHoverCloseTimerRef.current);
+      aiHoverCloseTimerRef.current = null;
+    }
+    setAiHoverOpen(true);
+  };
+  const scheduleCloseAiHoverMenu = () => {
+    if (aiHoverCloseTimerRef.current) clearTimeout(aiHoverCloseTimerRef.current);
+    aiHoverCloseTimerRef.current = setTimeout(() => {
+      setAiHoverOpen(false);
+    }, 220);
+  };
   const [lastFolderEvent, setLastFolderEvent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
@@ -1080,21 +1100,66 @@ function HeliosPulsePortalInner() {
     const proj = moreBillsData?.next_bill_projection;
     const bankNow = moreBillsData?.current_credit_bank_kwh ?? 2210;
     let reply = '';
+
     if (ql.includes('next') && ql.includes('bill')) {
       reply = proj
-        ? `Projected next NYSEG bill (${proj.billing_start_date} to ${proj.billing_end_date}): $${proj.projected_energy_charge.toFixed(2)} minimum charge (${proj.measured_days} measured days + ${proj.remaining_forecast_days} forecast days). Projected M01 import is ${proj.projected_m01_kwh} kWh vs ${proj.projected_m02_kwh} kWh M02 export (+${proj.projected_net_import_kwh} kWh net import), reducing your Credit Bank from ${proj.credit_bank_before_kwh.toLocaleString()} kWh to ${proj.credit_bank_after_kwh.toLocaleString()} kWh (${proj.credit_bank_delta_kwh.toFixed(1)} kWh).`
+        ? `Projected next NYSEG bill (${proj.billing_start_date} to ${proj.billing_end_date}, ${proj.days_in_period} days): $${proj.projected_energy_charge.toFixed(2)} minimum charge floor (${proj.measured_days} measured days through ${proj.measured_through_date} + ${proj.remaining_forecast_days} forecast days). Projected M01 import is ${proj.projected_m01_kwh} kWh vs ${proj.projected_m02_kwh} kWh M02 export (${proj.projected_net_import_kwh} kWh net import), reducing your Credit Bank from ${proj.credit_bank_before_kwh.toLocaleString()} kWh to ${proj.credit_bank_after_kwh.toLocaleString()} kWh (${proj.credit_bank_delta_kwh.toFixed(1)} kWh).`
         : `Your latest NYSEG bill was $43.57; no next-bill projection is currently loaded.`;
-    } else if (ql.includes('credit') || ql.includes('bank')) {
-      reply = `Your official NYSEG credit-bank balance is ${bankNow.toLocaleString()} kWh on the 2026-11-05 statement. Including unbilled interval flow through ${TELEMETRY_META.latest_nyseg_date || '2026-11-15'}, your forecast opening balance is ${(CREDIT_BANK_FORECAST?.opening_projected_kwh ?? 2071.8).toFixed(1)} kWh and stays positive through winter.`;
-    } else if (ql.includes('export') || ql.includes('m02') || ql.includes('m01')) {
+    } else if (ql.includes('anomal') || ql.includes('issue') || ql.includes('alert') || ql.includes('missing')) {
+      if (combinedAlerts.length === 0) {
+        reply = `No data or application anomalies are currently active. Email alerts to dglanville@gmail.com are armed for missing NYSEG intervals, physical bound violations (M02 > Solar + 0.5 kWh), solar underperformance, and pipeline/app errors.`;
+      } else {
+        const itemsText = combinedAlerts
+          .map((a, idx) => `${idx + 1}) [${a.severity.toUpperCase()}] ${a.title}: ${a.message}`)
+          .join(' ');
+        reply = `${combinedAlerts.length} active alert(s) detected and tracked for email notification to dglanville@gmail.com: ${itemsText}`;
+      }
+    } else if (ql.includes('distribution') || ql.includes('grid balance') || ql.includes('energy flow')) {
+      reply = `On ${distDayMetrics.date} (Energy Distribution), your SunRun array produced ${distDayMetrics.solar} kWh, NYSEG delivered ${distDayMetrics.m01} kWh (M01) and received ${distDayMetrics.m02} kWh (M02), resulting in ${distDayMetrics.homeConsumed} kWh estimated home consumption. Grid dependence was ${distDayMetrics.gridDepPct}% and solar coverage was ${distDayMetrics.solarCovPct}% (${distDayMetrics.co2AvoidedLb} lb CO₂ avoided).`;
+    } else if (ql.includes('credit') || ql.includes('bank') || ql.includes('winter') || ql.includes('forecast')) {
+      const forecastRows = CREDIT_BANK_FORECAST?.rows || [];
+      const minBankRow = forecastRows.length
+        ? forecastRows.reduce((minR, r) => (r.ending_bank_kwh < minR.ending_bank_kwh ? r : minR), forecastRows[0])
+        : null;
+      const historyText = (moreBillsData?.credit_bank_history || [])
+        .map((h) => `${h.period_label.slice(0, 10)}: ${h.remaining_kwh} kWh`)
+        .join(' → ');
+      reply = `Your official NYSEG credit-bank balance is ${bankNow.toLocaleString()} kWh (${historyText || '0 → 2,210 kWh'}). With unbilled flow included, the 12-month forecast opens at ${(CREDIT_BANK_FORECAST?.opening_projected_kwh ?? 2075.0).toFixed(1)} kWh${minBankRow ? `, reaches its winter low of ${Math.round(minBankRow.ending_bank_kwh).toLocaleString()} kWh in ${minBankRow.month_label || minBankRow.month}` : ''}, and does not exhaust in the next 12 months.`;
+    } else if (ql.includes('saved') || ql.includes('saving') || ql.includes('$0.24') || ql.includes('dollar')) {
+      const rate = 0.24;
+      const grossSolarVal = Number(solarTotals.cumSolar) * rate;
+      const exportVal = Number(solarTotals.cumExp) * rate;
+      const selfConsumedKwh = Math.max(0, Number(solarTotals.reconciledSolar) - Number(solarTotals.cumExp));
+      const selfConsumedVal = selfConsumedKwh * rate;
+      reply = `At $0.24/kWh across ${solarTotals.totalDays} days: total solar produced (${Number(solarTotals.cumSolar).toLocaleString()} kWh) equals ~$${grossSolarVal.toFixed(2)} of electricity value. Across ${solarTotals.reconciledCount} NYSEG-reconciled days, M02 exports (${Number(solarTotals.cumExp).toLocaleString()} kWh = $${exportVal.toFixed(2)}) plus direct solar self-consumption (${selfConsumedKwh.toFixed(1)} kWh = $${selfConsumedVal.toFixed(2)}) keep NYSEG post-solar bills at the $43.57 minimum charge floor with +${Number(solarTotals.bankBalance).toLocaleString()} kWh net exported.`;
+    } else if (ql.includes('monthly') && ql.includes('csv')) {
+      const peakMonth = [...MONTHLY_SUMMARIES].sort((a, b) => b.solar_kwh - a.solar_kwh)[0];
+      const summaryLines = MONTHLY_SUMMARIES.map(
+        (m) => `${m.month}: ${m.solar_kwh} kWh solar | ${m.m01_import_kwh} M01 | ${m.m02_export_kwh} M02`
+      ).join(' • ');
+      reply = `Monthly CSV breakdown (newest first): ${summaryLines}.${peakMonth ? ` Peak solar month: ${peakMonth.month} (${peakMonth.solar_kwh.toLocaleString()} kWh).` : ''}`;
+    } else if (ql.includes('bill') || ql.includes('summarize')) {
+      const totalBills = moreBillsData?.total_pdf_files ?? 19;
+      const authCount = moreBillsData?.authoritative_count ?? 17;
+      const latestAuth = (moreBillsData?.bills || []).find((b) => b.is_authoritative);
+      reply = `Analyzed ${totalBills} NYSEG PDF bills (${authCount} unique billing periods) from More Bills. Latest authoritative statement (${latestAuth?.statement_date || '2026-11-05'} for ${latestAuth?.billing_start_date || '2026-10-07'} to ${latestAuth?.billing_end_date || '2026-11-03'}): $${Number(latestAuth?.total_energy_charges ?? 43.57).toFixed(2)} energy charge, ${latestAuth?.imported_kwh ?? 437} kWh M01 import, ${latestAuth?.exported_kwh ?? 591} kWh M02 export, leaving ${bankNow.toLocaleString()} kWh in your Credit Bank.`;
+    } else if (ql.includes('export') || ql.includes('green') || ql.includes('yellow') || ql.includes('m02') || ql.includes('m01')) {
       const exportDays = reconciledRowsChrono.filter((r) => (r.m02_export_kwh || 0) > (r.m01_import_kwh || 0)).length;
       const importDays = reconciledRowsChrono.length - exportDays;
-      reply = `Across ${reconciledRowsChrono.length} NYSEG-reconciled days, ${exportDays} days had net exports (M02 > M01, highlighted green) and ${importDays} days had net imports (M02 ≤ M01, highlighted yellow). Cumulative NYSEG totals: ${solarTotals.cumM02} kWh M02 exported vs ${solarTotals.cumM01} kWh M01 imported.`;
-    } else if (ql.includes('bill') || ql.includes('nyseg') || ql.includes('month')) {
-      reply = `Your latest NYSEG statement (2026-11-05 for period 2026-10-07 to 2026-11-03) recorded 437 kWh M01 import and 591 kWh M02 export (+154 kWh net export), with $43.57 in energy charges ($40.99 delivery + $0.00 supply + $2.58 taxes) and ${bankNow.toLocaleString()} kWh remaining in your official excess-generation credit bank.`;
+      reply = `Across ${reconciledRowsChrono.length} NYSEG-reconciled days in the Interval Data Grid, ${exportDays} days were net exports (M02 > M01, green rows) and ${importDays} days were net imports (M02 ≤ M01, yellow rows). Reconciled totals: ${Number(solarTotals.cumExp).toLocaleString()} kWh M02 exported vs ${Number(solarTotals.cumImp).toLocaleString()} kWh M01 imported (+${solarTotals.bankBalance} kWh net).`;
+    } else if (ql.includes('best') || ql.includes('lowest') || ql.includes('peak')) {
+      const positiveDays = solarRows.filter((r) => (r.solar_kwh || 0) > 0);
+      const best = positiveDays.length ? positiveDays.reduce((a, b) => (b.solar_kwh > a.solar_kwh ? b : a)) : null;
+      const low = positiveDays.length ? positiveDays.reduce((a, b) => (b.solar_kwh < a.solar_kwh ? b : a)) : null;
+      reply = best && low
+        ? `Best production day: ${best.date} with ${best.solar_kwh.toFixed(1)} kWh (${best.irradiance}). Lowest non-zero day: ${low.date} with ${low.solar_kwh.toFixed(1)} kWh (${low.irradiance}). Cumulative total across ${solarTotals.totalDays} days is ${Number(solarTotals.cumSolar).toLocaleString()} kWh.`
+        : `Total solar production is ${solarTotals.cumSolar} kWh across ${solarTotals.totalDays} days.`;
+    } else if (ql.includes('sync') || ql.includes('schedule') || ql.includes('system') || ql.includes('hardware')) {
+      reply = `System: Sunrun 18.45 kW DC rooftop array (41 panels) + NYSEG Bidirectional Smart Meter. Loaded ${TELEMETRY_META.sunrun_total_rows} SunRun CSV days and ${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} NYSEG hourly intervals (${solarTotals.reconciledCount} reconciled days, EOD meter ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}). Daily auto-sync is scheduled at 7:30 AM EST with live folder watchers & email alerts to dglanville@gmail.com.`;
     } else {
-      reply = `Your Sunrun array has produced ${solarTotals.cumSolar} kWh cumulatively across ${solarTotals.totalDays} CSV days (End-of-Day Meter Reading: ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}).`;
+      reply = `Your SunRun array has produced ${Number(solarTotals.cumSolar).toLocaleString()} kWh cumulatively across ${solarTotals.totalDays} CSV days (${solarTotals.reconciledCount} NYSEG-reconciled days: ${Number(solarTotals.cumExp).toLocaleString()} kWh M02 exported vs ${Number(solarTotals.cumImp).toLocaleString()} kWh M01 imported, Official Credit Bank: ${bankNow.toLocaleString()} kWh).`;
     }
+
     setAiMessages((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: reply }]);
     setAiQuery('');
   };
@@ -1844,42 +1909,68 @@ function HeliosPulsePortalInner() {
                   <span>{isSyncing ? 'Syncing...' : 'Sync CSVs'}</span>
                 </button>
 
-                <div className="relative group">
+                <div
+                  className="relative"
+                  onMouseEnter={openAiHoverMenu}
+                  onMouseLeave={scheduleCloseAiHoverMenu}
+                >
                   <button
-                    onClick={() => setShowAiDrawer(true)}
+                    type="button"
+                    onClick={() => {
+                      setAiHoverOpen(false);
+                      setShowAiDrawer(true);
+                    }}
+                    onFocus={openAiHoverMenu}
+                    aria-expanded={aiHoverOpen}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border transition cursor-pointer ${pillBtnSecondary}`}
                   >
                     <Sparkles className="w-3 h-3 text-[#e07a16]" />
                     <span className="hidden sm:inline">Ask AI</span>
                   </button>
 
-                  {/* HOVER POPOVER: LIST OF QUESTIONS YOU CAN ASK */}
-                  <div className="hidden group-hover:block group-focus-within:block absolute left-0 sm:left-auto sm:right-0 top-full pt-1.5 w-80 max-w-[calc(100vw-2rem)] z-50">
-                    <div className={`rounded-2xl border p-2.5 shadow-xl space-y-1 ${cardBg}`}>
-                      <div className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5 ${mutedText}`}>
-                        <Sparkles className="w-3 h-3 text-[#e07a16]" />
-                        <span>Questions you can ask</span>
+                  {/* HOVER POPOVER: SELECTABLE QUESTIONS TO EXECUTE */}
+                  {aiHoverOpen && (
+                    <div
+                      onMouseEnter={openAiHoverMenu}
+                      onMouseLeave={scheduleCloseAiHoverMenu}
+                      className="absolute left-0 xl:left-auto xl:right-0 top-full pt-1.5 w-88 max-w-[calc(100vw-2rem)] z-50"
+                    >
+                      <div className={`rounded-2xl border p-2.5 shadow-xl space-y-1 max-h-[70vh] overflow-y-auto ${cardBg}`}>
+                        <div className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider flex items-center justify-between gap-1.5 ${mutedText}`}>
+                          <span className="flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-[#e07a16]" />
+                            <span>Questions you can ask</span>
+                          </span>
+                          <span className="text-[9px] font-normal normal-case">Click to run</span>
+                        </div>
+                        {AI_SUGGESTED_QUESTIONS.map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAiHoverOpen(false);
+                              setShowAiDrawer(true);
+                              handleAskAi(q);
+                            }}
+                            className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-center justify-between gap-2 border border-transparent group/item ${
+                              darkMode
+                                ? 'hover:bg-slate-800 hover:border-slate-700 text-slate-200'
+                                : 'hover:bg-[#efece4] hover:border-[#dcd8ce] text-[#1a1917]'
+                            }`}
+                          >
+                            <span className="flex items-start gap-2">
+                              <span className="text-[#e07a16] font-bold mt-px">→</span>
+                              <span>{q}</span>
+                            </span>
+                            <span className="text-[10px] font-semibold text-[#1f7a4c] opacity-0 group-hover/item:opacity-100 shrink-0">
+                              Run
+                            </span>
+                          </button>
+                        ))}
                       </div>
-                      {AI_SUGGESTED_QUESTIONS.map((q) => (
-                        <button
-                          key={q}
-                          type="button"
-                          onClick={() => {
-                            setShowAiDrawer(true);
-                            handleAskAi(q);
-                          }}
-                          className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-start gap-2 ${
-                            darkMode
-                              ? 'hover:bg-slate-800 text-slate-200'
-                              : 'hover:bg-[#efece4] text-[#1a1917]'
-                          }`}
-                        >
-                          <span className="text-[#e07a16] font-bold mt-px">→</span>
-                          <span>{q}</span>
-                        </button>
-                      ))}
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <button
@@ -3443,12 +3534,12 @@ function HeliosPulsePortalInner() {
             </div>
 
             <div className={`space-y-2 pt-3 border-t ${dividerBorder}`}>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
                 {AI_SUGGESTED_QUESTIONS.map((preset) => (
                   <button
                     key={preset}
                     onClick={() => handleAskAi(preset)}
-                    className={`text-[11px] px-3 py-1 rounded-full cursor-pointer ${calloutBg}`}
+                    className={`text-[11px] px-3 py-1 rounded-full cursor-pointer text-left hover:opacity-90 ${calloutBg}`}
                   >
                     {preset}
                   </button>
