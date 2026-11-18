@@ -64,10 +64,10 @@ const SYNC_STEPS = [
 ];
 
 const TOP_MENU_ITEMS = [
+  { id: 'datagrid', label: 'Interval Data Grid' },
   { id: 'distribution', label: 'Energy Distribution' },
   { id: 'charts', label: 'Comparison & Cost' },
   { id: 'bills', label: 'NYSEG Monthly Bills' },
-  { id: 'datagrid', label: 'Interval Data Grid' },
   { id: 'estimator', label: 'Credit forecaster' },
   { id: 'monthly', label: 'Production by month' },
   { id: 'savings', label: 'Solar savings' },
