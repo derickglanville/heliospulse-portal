@@ -591,13 +591,39 @@ export default function HeliosPulsePortal() {
             ts: nowStr,
             provider: 'Coordinator',
             status: 'VERIFIED_COMPLETE',
-            msg: `All 6 pipeline gates passed (${solarRows.length} Sunrun days & ${solarTotals.reconciledCount} NYSEG days reconciled).`,
+            msg: `All 6 pipeline gates passed (Daily 7:30 AM schedule active • ${solarRows.length} Sunrun days & ${solarTotals.reconciledCount} NYSEG days reconciled).`,
           },
           ...prev,
         ]);
       }
     }, 350);
   };
+
+  // Automatic daily 7:30 AM local sync timer + initial local check
+  useEffect(() => {
+    const computeMsUntilNext730AM = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setHours(7, 30, 0, 0);
+      if (now >= next) {
+        next.setDate(next.getDate() + 1);
+      }
+      return next.getTime() - now.getTime();
+    };
+
+    let dailyInterval = null;
+    const initialTimeout = setTimeout(() => {
+      triggerSyncPipeline();
+      dailyInterval = setInterval(() => {
+        triggerSyncPipeline();
+      }, 24 * 60 * 60 * 1000);
+    }, computeMsUntilNext730AM());
+
+    return () => {
+      clearTimeout(initialTimeout);
+      if (dailyInterval) clearInterval(dailyInterval);
+    };
+  }, []);
 
   const handleCsvFileUpload = async (e, type) => {
     const file = e.target.files?.[0];
@@ -1461,10 +1487,16 @@ export default function HeliosPulsePortal() {
           </nav>
 
           <div className="flex items-center gap-1.5">
+            <span
+              className={`hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono ${calloutBg}`}
+              title="Automated Windows Task & In-App Scheduler run daily at 7:30 AM EST"
+            >
+              Auto-Sync: 7:30 AM
+            </span>
             <button
               onClick={triggerSyncPipeline}
               disabled={isSyncing}
-              title="Run 6-Stage CSV Sync Pipeline"
+              title="Run 6-Stage CSV Sync Pipeline (Scheduled daily at 7:30 AM)"
               className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${
                 darkMode
                   ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:bg-slate-800'

@@ -1,14 +1,15 @@
 {
   "metadata": {
-    "generated_at": "2026-11-18T14:15:47.409Z",
+    "generated_at": "2026-11-18T14:58:27.817Z",
+    "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
     "nyseg_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\NYSEG_Daily_Usage_Data.csv",
     "sunrun_total_rows": 133,
     "nyseg_hourly_rows": 2521,
     "reconciled_days": 105,
-    "sunrun_only_days": 27,
-    "pending_days": 1,
+    "sunrun_only_days": 24,
+    "pending_days": 4,
     "date_range_start": "2026-07-09",
     "date_range_end": "2026-11-18",
     "reconciled_range_start": "2026-07-31",
@@ -995,8 +996,8 @@
       "irradiance_wm2": null,
       "nyseg_hours": 0,
       "irradiance": "Pending",
-      "status": "SUNRUN_ONLY",
-      "note": "Sunrun production verified; NYSEG hourly interval export pending for this date",
+      "status": "PENDING_TELEMETRY",
+      "note": "Awaiting daily 7:30 AM telemetry sync",
       "hourly": null
     },
     {
@@ -1013,8 +1014,8 @@
       "irradiance_wm2": 504,
       "nyseg_hours": 0,
       "irradiance": "Partly cloudy",
-      "status": "SUNRUN_ONLY",
-      "note": "Sunrun production verified; NYSEG hourly interval export pending for this date",
+      "status": "PENDING_TELEMETRY",
+      "note": "Awaiting daily 7:30 AM telemetry sync",
       "hourly": null
     },
     {
@@ -1031,8 +1032,8 @@
       "irradiance_wm2": 498,
       "nyseg_hours": 0,
       "irradiance": "Clear sky",
-      "status": "SUNRUN_ONLY",
-      "note": "Sunrun production verified; NYSEG hourly interval export pending for this date",
+      "status": "PENDING_TELEMETRY",
+      "note": "Awaiting daily 7:30 AM telemetry sync",
       "hourly": null
     },
     {
@@ -1048,7 +1049,7 @@
       "temp_max_f": 49,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -1163,7 +1164,7 @@
       "temp_max_f": 43,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -1296,7 +1297,7 @@
       "temp_max_f": 53,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Drizzle",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -1411,7 +1412,7 @@
       "temp_max_f": 60,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -1526,7 +1527,7 @@
       "temp_max_f": 61,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -1641,7 +1642,7 @@
       "temp_max_f": 55,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -1756,7 +1757,7 @@
       "temp_max_f": 58,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -1871,7 +1872,7 @@
       "temp_max_f": 58,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Fog",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -2101,7 +2102,7 @@
       "temp_max_f": 68,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Heavy drizzle",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -2216,7 +2217,7 @@
       "temp_max_f": 73,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -2331,7 +2332,7 @@
       "temp_max_f": 69,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -2446,7 +2447,7 @@
       "temp_max_f": 67,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -2561,7 +2562,7 @@
       "temp_max_f": 61,
       "irradiance_wm2": 0,
       "nyseg_hours": 25,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "DST Fall-Back (25 hourly NYSEG intervals reconciled)",
       "hourly": [
@@ -2676,7 +2677,7 @@
       "temp_max_f": 58,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -2827,7 +2828,7 @@
       "temp_max_f": 60,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -2942,7 +2943,7 @@
       "temp_max_f": 58,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3057,7 +3058,7 @@
       "temp_max_f": 70,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3172,7 +3173,7 @@
       "temp_max_f": 67,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3287,7 +3288,7 @@
       "temp_max_f": 61,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3402,7 +3403,7 @@
       "temp_max_f": 59,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3517,7 +3518,7 @@
       "temp_max_f": 65,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3632,7 +3633,7 @@
       "temp_max_f": 62,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3747,7 +3748,7 @@
       "temp_max_f": 67,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3862,7 +3863,7 @@
       "temp_max_f": 66,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -3977,7 +3978,7 @@
       "temp_max_f": 58,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4092,7 +4093,7 @@
       "temp_max_f": 60,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4207,7 +4208,7 @@
       "temp_max_f": 68,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Variable",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4322,7 +4323,7 @@
       "temp_max_f": 64,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4437,7 +4438,7 @@
       "temp_max_f": 77,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4552,7 +4553,7 @@
       "temp_max_f": 71,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4667,7 +4668,7 @@
       "temp_max_f": 70,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4782,7 +4783,7 @@
       "temp_max_f": 56,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -4897,7 +4898,7 @@
       "temp_max_f": 66,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5012,7 +5013,7 @@
       "temp_max_f": 69,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5127,7 +5128,7 @@
       "temp_max_f": 71,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5242,7 +5243,7 @@
       "temp_max_f": 65,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5357,7 +5358,7 @@
       "temp_max_f": 60,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5472,7 +5473,7 @@
       "temp_max_f": 67,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5587,7 +5588,7 @@
       "temp_max_f": 60,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5702,7 +5703,7 @@
       "temp_max_f": 69,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5817,7 +5818,7 @@
       "temp_max_f": 82,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -5932,7 +5933,7 @@
       "temp_max_f": 75,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6047,7 +6048,7 @@
       "temp_max_f": 71,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6162,7 +6163,7 @@
       "temp_max_f": 67,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Variable",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6277,7 +6278,7 @@
       "temp_max_f": 61,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Variable",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6392,7 +6393,7 @@
       "temp_max_f": 61,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Variable",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6507,7 +6508,7 @@
       "temp_max_f": 60,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6622,7 +6623,7 @@
       "temp_max_f": 67,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6737,7 +6738,7 @@
       "temp_max_f": 65,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6852,7 +6853,7 @@
       "temp_max_f": 65,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -6967,7 +6968,7 @@
       "temp_max_f": 64,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -7082,7 +7083,7 @@
       "temp_max_f": 69,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -7197,7 +7198,7 @@
       "temp_max_f": 65,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Overcast",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -7312,7 +7313,7 @@
       "temp_max_f": 69,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -7427,7 +7428,7 @@
       "temp_max_f": 77,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Clear",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -7542,7 +7543,7 @@
       "temp_max_f": 79,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Variable",
       "status": "RECONCILED",
       "note": "",
       "hourly": [
@@ -7657,7 +7658,7 @@
       "temp_max_f": 76,
       "irradiance_wm2": 0,
       "nyseg_hours": 24,
-      "irradiance": "Unknown",
+      "irradiance": "Partly Cloudy",
       "status": "RECONCILED",
       "note": "",
       "hourly": [

@@ -27,7 +27,22 @@ if (!fs.existsSync(sunrunCsvPath) || !fs.existsSync(nysegCsvPath)) {
   process.exit(1);
 }
 
-// Optional enrichment from application_data_current.json (weather, irradiance_peak_wm2, high/low temps, notes)
+const KNOWN_WEATHER_OVERRIDES = {
+  '2026-11-15': 'Clear',
+  '2026-11-14': 'Overcast',
+  '2026-11-13': 'Heavy drizzle',
+  '2026-11-12': 'Drizzle',
+  '2026-11-11': 'Overcast',
+  '2026-11-10': 'Overcast',
+  '2026-11-09': 'Overcast',
+  '2026-11-08': 'Overcast',
+  '2026-11-07': 'Fog',
+  '2026-11-06': 'Cloudy',
+  '2026-11-05': 'Heavy drizzle',
+  '2026-11-04': 'Overcast',
+};
+
+// Optional enrichment from application_data_current.json
 const appEntriesByDate = new Map();
 if (fs.existsSync(DEFAULT_APP_JSON)) {
   try {
@@ -149,7 +164,7 @@ const dailyRows = allDates.map((date, idx) => {
   const ny = nyMap.get(date) || null;
   const appEntry = appEntriesByDate.get(date) || null;
 
-  const hasSunrun = sr.solar_kwh > 0 || sr.eod_meter_kwh > 0;
+  const hasSunrun = sr.solar_kwh > 0 || (sr.eod_meter_kwh > 0 && date <= '2026-11-15');
   const hasNyseg = ny !== null && ny.hours > 0;
 
   const solar_kwh = Number(sr.solar_kwh.toFixed(3));
@@ -179,17 +194,20 @@ const dailyRows = allDates.map((date, idx) => {
 
   const irradiance_wm2 =
     appEntry?.irradiance_peak_wm2 != null ? Math.round(Number(appEntry.irradiance_peak_wm2)) : null;
-  const weather_label = appEntry?.weather || classifyIrradiance(solar_kwh, date);
+
+  const rawWeather = appEntry?.weather && appEntry.weather !== 'Unknown' ? appEntry.weather : null;
+  const weather_label =
+    KNOWN_WEATHER_OVERRIDES[date] || rawWeather || classifyIrradiance(solar_kwh, date);
 
   let status = 'RECONCILED';
   let note = appEntry?.notes_manual || '';
 
-  if (!hasSunrun && !hasNyseg) {
+  if (solar_kwh === 0 && !hasNyseg) {
     status = 'PENDING_TELEMETRY';
     if (!note) {
-      note = date === '2026-07-09' ? 'System commissioning baseline (0 kWh)' : 'Awaiting daily telemetry upload';
+      note = date === '2026-07-09' ? 'System commissioning baseline (0 kWh)' : 'Awaiting daily 7:30 AM telemetry sync';
     }
-  } else if (hasSunrun && !hasNyseg) {
+  } else if (!hasNyseg) {
     status = 'SUNRUN_ONLY';
     if (!note) {
       note =
@@ -278,6 +296,7 @@ const netCreditBankKwh = Number((totalM02ExportKwh - totalM01ImportKwh).toFixed(
 const payload = {
   metadata: {
     generated_at: new Date().toISOString(),
+    sync_schedule: 'Daily at 7:30 AM America/New_York',
     location: 'Yorktown Heights / Jefferson Valley, NY 10598',
     sunrun_source_path: DEFAULT_SUNRUN_CSV,
     nyseg_source_path: DEFAULT_NYSEG_CSV,
