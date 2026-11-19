@@ -1,37 +1,35 @@
 {
   "metadata": {
-    "generated_at": "2026-11-19T01:57:19.503Z",
+    "generated_at": "2026-11-19T12:30:54.996Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
     "nyseg_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\NYSEG_Daily_Usage_Data.csv",
-    "sunrun_total_rows": 133,
-    "nyseg_hourly_rows": 2521,
-    "reconciled_days": 105,
-    "sunrun_only_days": 24,
+    "sunrun_total_rows": 134,
+    "nyseg_hourly_rows": 2617,
+    "reconciled_days": 109,
+    "sunrun_only_days": 21,
     "pending_days": 4,
     "date_range_start": "2026-07-09",
-    "date_range_end": "2026-11-18",
+    "date_range_end": "2026-11-19",
     "reconciled_range_start": "2026-07-31",
-    "latest_reconciled_date": "2026-11-15",
+    "latest_reconciled_date": "2026-11-16",
     "latest_sunrun_date": "2026-11-15",
     "cumulative_solar_kwh": 6153.549,
-    "reconciled_solar_kwh": 4666.739,
-    "cumulative_m01_import_kwh": 1800.017,
-    "cumulative_m02_export_kwh": 3358.709,
-    "reconciled_edc_consumed_kwh": 3108.047,
-    "cumulative_net_credit_bank_kwh": 1558.692
+    "reconciled_solar_kwh": 4733.282,
+    "cumulative_m01_import_kwh": 1891.658,
+    "cumulative_m02_export_kwh": 3402.843,
+    "reconciled_edc_consumed_kwh": 3222.097,
+    "cumulative_net_credit_bank_kwh": 1511.185
   },
   "alerts": [
     {
-      "code": "MISSING_NYSEG_INTERVALS",
-      "severity": "warning",
-      "title": "NYSEG hourly intervals missing for 3 post-export date(s)",
-      "message": "SunRun solar generation was recorded, but NYSEG smart-meter hourly CSV data is missing for: 2026-10-29, 2026-10-30, 2026-11-13.",
+      "code": "EXPORT_EXCEEDS_SOLAR",
+      "severity": "error",
+      "title": "NYSEG M02 export exceeds SunRun solar production",
+      "message": "Physical bound check (M02 <= Solar + 0.5 kWh) failed on 1 date(s). Check meter clock alignment or CSV source.",
       "dates": [
-        "2026-10-29",
-        "2026-10-30",
-        "2026-11-13"
+        "2026-11-16"
       ]
     },
     {
@@ -50,13 +48,42 @@
   ],
   "notification_status": {
     "recipient": "dglanville@gmail.com",
-    "should_send": false,
-    "unsent_anomaly_count": 0,
+    "should_send": true,
+    "unsent_anomaly_count": 1,
     "new_sunrun_count": 0,
-    "new_nyseg_count": 0,
+    "new_nyseg_count": 4,
     "new_bills_count": 0,
-    "emails_dispatched": [],
+    "emails_dispatched": [
+      {
+        "sent_at": "2026-11-19T07:30:54",
+        "recipient": "dglanville@gmail.com",
+        "subject": "[HeliosPulse Alert] 1 Data/App Anomaly & Issue(s) Detected",
+        "status": "sent",
+        "category": "anomaly_alert"
+      },
+      {
+        "sent_at": "2026-11-19T07:30:54",
+        "recipient": "dglanville@gmail.com",
+        "subject": "[HeliosPulse Sync] New Records Added (4 NYSEG)",
+        "status": "sent",
+        "category": "new_records"
+      }
+    ],
     "recent_email_events": [
+      {
+        "sent_at": "2026-11-19T07:30:54",
+        "recipient": "dglanville@gmail.com",
+        "subject": "[HeliosPulse Sync] New Records Added (4 NYSEG)",
+        "status": "sent",
+        "category": "new_records"
+      },
+      {
+        "sent_at": "2026-11-19T07:30:54",
+        "recipient": "dglanville@gmail.com",
+        "subject": "[HeliosPulse Alert] 1 Data/App Anomaly & Issue(s) Detected",
+        "status": "sent",
+        "category": "anomaly_alert"
+      },
       {
         "sent_at": "2026-11-18T12:11:41",
         "recipient": "dglanville@gmail.com",
@@ -65,33 +92,38 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-19T01:57:19.511Z",
+    "last_checked_at": "2026-11-19T12:30:55.018Z",
     "new_sunrun_dates": [],
-    "new_nyseg_dates": [],
+    "new_nyseg_dates": [
+      "2026-10-29",
+      "2026-10-30",
+      "2026-11-13",
+      "2026-11-16"
+    ],
     "new_bill_files": []
   },
   "monthly_summaries": [
     {
       "month": "2026-11",
       "solar_kwh": 324.38,
-      "m01_import_kwh": 294.35,
-      "m02_export_kwh": 160.91,
-      "credit_delta": -133.44,
-      "reconciled_days": 14,
+      "m01_import_kwh": 351.49,
+      "m02_export_kwh": 171.45,
+      "credit_delta": -180.03,
+      "reconciled_days": 16,
       "sunrun_days": 15,
-      "prior_credit_bank": 1692.1,
-      "ending_credit_bank": 1558.7
+      "prior_credit_bank": 1691.2,
+      "ending_credit_bank": 1511.2
     },
     {
       "month": "2026-10",
       "solar_kwh": 1035.84,
-      "m01_import_kwh": 437.21,
-      "m02_export_kwh": 664.63,
-      "credit_delta": 227.42,
-      "reconciled_days": 29,
+      "m01_import_kwh": 471.71,
+      "m02_export_kwh": 698.22,
+      "credit_delta": 226.51,
+      "reconciled_days": 31,
       "sunrun_days": 31,
       "prior_credit_bank": 1464.7,
-      "ending_credit_bank": 1692.1
+      "ending_credit_bank": 1691.2
     },
     {
       "month": "2026-09",
@@ -132,11 +164,11 @@
     "official_credit_kwh": 2210,
     "official_statement_date": "2026-11-05",
     "official_period_end": "2026-11-03",
-    "interval_file_end": "2026-11-15",
-    "unbilled_m01_kwh": 242.185,
-    "unbilled_m02_kwh": 103.97500000000001,
-    "unbilled_net_credit_kwh": -138.20999999999998,
-    "opening_projected_kwh": 2071.79,
+    "interval_file_end": "2026-11-16",
+    "unbilled_m01_kwh": 299.3189999999999,
+    "unbilled_m02_kwh": 114.512,
+    "unbilled_net_credit_kwh": -184.8069999999999,
+    "opening_projected_kwh": 2025.1930000000002,
     "estimated_rate_per_kwh": 0.0997025171624714,
     "billing_estimate_basis": {
       "statement_count": 3,
@@ -152,16 +184,16 @@
       {
         "month": "December 2026",
         "solar_production_kwh": 453.58932574886455,
-        "household_consumption_kwh": 993.148897413793,
-        "normal_load_kwh": 820.1688974137929,
+        "household_consumption_kwh": 995.416725,
+        "normal_load_kwh": 822.436725,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 172.98,
-        "predicted_m01_kwh": 698.8204898940224,
-        "predicted_m02_kwh": 159.26091822909396,
-        "net_usage_kwh": 539.5595716649285,
-        "credit_applied_kwh": 539.5595716649285,
-        "ending_credit_kwh": 1532.2304283350713,
-        "credit_bank_change_kwh": -539.5595716649286,
+        "predicted_m01_kwh": 700.5213605836773,
+        "predicted_m02_kwh": 158.69396133254216,
+        "net_usage_kwh": 541.8273992511351,
+        "credit_applied_kwh": 541.8273992511351,
+        "ending_credit_kwh": 1483.365600748865,
+        "credit_bank_change_kwh": -541.8273992511351,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -170,22 +202,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 1301.612015088207,
-        "optimistic_ending_credit_kwh": 1657.0412727030614
+        "conservative_ending_credit_kwh": 1252.407013364069,
+        "optimistic_ending_credit_kwh": 1608.3578713237514
       },
       {
         "month": "January 2027",
         "solar_production_kwh": 499.99723061178577,
-        "household_consumption_kwh": 1021.0488974137929,
-        "normal_load_kwh": 820.1688974137929,
+        "household_consumption_kwh": 1023.316725,
+        "normal_load_kwh": 822.436725,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 200.88,
-        "predicted_m01_kwh": 701.879775258171,
-        "predicted_m02_kwh": 180.82810845616376,
-        "net_usage_kwh": 521.0516668020073,
-        "credit_applied_kwh": 521.0516668020073,
-        "ending_credit_kwh": 1011.1787615330641,
-        "credit_bank_change_kwh": -521.0516668020073,
+        "predicted_m01_kwh": 703.5806459478262,
+        "predicted_m02_kwh": 180.26115155961202,
+        "net_usage_kwh": 523.3194943882141,
+        "credit_applied_kwh": 523.3194943882141,
+        "ending_credit_kwh": 960.0461063606509,
+        "credit_bank_change_kwh": -523.3194943882141,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -194,46 +226,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 537.4035121640096,
-        "optimistic_ending_credit_kwh": 1267.673240755336
+        "conservative_ending_credit_kwh": 485.59050871573334,
+        "optimistic_ending_credit_kwh": 1216.903437996716
       },
       {
         "month": "February 2027",
         "solar_production_kwh": 671.5664484587068,
-        "household_consumption_kwh": 912.1577137931033,
-        "normal_load_kwh": 740.7977137931033,
+        "household_consumption_kwh": 914.2060741935484,
+        "normal_load_kwh": 742.8460741935484,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 171.36,
-        "predicted_m01_kwh": 572.6377049062914,
-        "predicted_m02_kwh": 332.04643957189506,
-        "net_usage_kwh": 240.59126533439638,
-        "credit_applied_kwh": 240.59126533439638,
-        "ending_credit_kwh": 770.5874961986676,
-        "credit_bank_change_kwh": -240.59126533439644,
-        "estimated_charges": 0,
-        "chargeable_kwh": 0,
-        "projected_delivery_charges": 0,
-        "projected_supply_charges": 0,
-        "projected_taxes": 0,
-        "projected_recurring_fees": 0.9499999999999998,
-        "minimum_monthly_amount_due": 43.57,
-        "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 39.106629038080655,
-        "optimistic_ending_credit_kwh": 1167.2112373702585
-      },
-      {
-        "month": "March 2027",
-        "solar_production_kwh": 1143.8702411355189,
-        "household_consumption_kwh": 965.248897413793,
-        "normal_load_kwh": 820.1688974137929,
-        "cooling_load_kwh": 0,
-        "heating_load_kwh": 145.08,
-        "predicted_m01_kwh": 537.564938690464,
-        "predicted_m02_kwh": 716.1862824121898,
-        "net_usage_kwh": -178.6213437217258,
-        "credit_applied_kwh": 0,
-        "ending_credit_kwh": 949.2088399203934,
-        "credit_bank_change_kwh": 178.6213437217258,
+        "predicted_m01_kwh": 574.0032785065885,
+        "predicted_m02_kwh": 331.3636527717467,
+        "net_usage_kwh": 242.6396257348418,
+        "credit_applied_kwh": 242.6396257348418,
+        "ending_credit_kwh": 717.4064806258091,
+        "credit_bank_change_kwh": -242.63962573484184,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -243,21 +251,45 @@
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
         "conservative_ending_credit_kwh": 0,
-        "optimistic_ending_credit_kwh": 1537.4395169986399
+        "optimistic_ending_credit_kwh": 1114.556943043229
+      },
+      {
+        "month": "March 2027",
+        "solar_production_kwh": 1143.8702411355189,
+        "household_consumption_kwh": 967.5167250000001,
+        "normal_load_kwh": 822.436725,
+        "cooling_load_kwh": 0,
+        "heating_load_kwh": 145.08,
+        "predicted_m01_kwh": 538.8878381157515,
+        "predicted_m02_kwh": 715.2413542512703,
+        "net_usage_kwh": -176.35351613551882,
+        "credit_applied_kwh": 0,
+        "ending_credit_kwh": 893.7599967613279,
+        "credit_bank_change_kwh": 176.35351613551882,
+        "estimated_charges": 0,
+        "chargeable_kwh": 0,
+        "projected_delivery_charges": 0,
+        "projected_supply_charges": 0,
+        "projected_taxes": 0,
+        "projected_recurring_fees": 0.9499999999999998,
+        "minimum_monthly_amount_due": 43.57,
+        "estimated_amount_due": 43.57,
+        "conservative_ending_credit_kwh": 0,
+        "optimistic_ending_credit_kwh": 1482.6988212922997
       },
       {
         "month": "April 2027",
         "solar_production_kwh": 1565.6578922579465,
-        "household_consumption_kwh": 874.7118362068965,
-        "normal_load_kwh": 793.7118362068965,
+        "household_consumption_kwh": 876.9065080645162,
+        "normal_load_kwh": 795.9065080645162,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 80.99999999999999,
-        "predicted_m01_kwh": 428.38121376493973,
-        "predicted_m02_kwh": 1119.32726981599,
-        "net_usage_kwh": -690.9460560510502,
+        "predicted_m01_kwh": 429.4785496937496,
+        "predicted_m02_kwh": 1118.2299338871799,
+        "net_usage_kwh": -688.7513841934303,
         "credit_applied_kwh": 0,
-        "ending_credit_kwh": 1640.1548959714437,
-        "credit_bank_change_kwh": 690.9460560510503,
+        "ending_credit_kwh": 1582.5113809547584,
+        "credit_bank_change_kwh": 688.7513841934305,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -266,22 +298,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 277.9208600135851,
-        "optimistic_ending_credit_kwh": 2454.9283091720367
+        "conservative_ending_credit_kwh": 275.3969873773225,
+        "optimistic_ending_credit_kwh": 2398.168515356686
       },
       {
         "month": "May 2027",
         "solar_production_kwh": 2047.543811933734,
-        "household_consumption_kwh": 848.0688974137929,
-        "normal_load_kwh": 820.1688974137929,
+        "household_consumption_kwh": 850.336725,
+        "normal_load_kwh": 822.436725,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 27.9,
-        "predicted_m01_kwh": 357.37256941566164,
-        "predicted_m02_kwh": 1556.8474839356022,
-        "net_usage_kwh": -1199.4749145199405,
+        "predicted_m01_kwh": 358.5064832087651,
+        "predicted_m02_kwh": 1555.713570142499,
+        "net_usage_kwh": -1197.207086933734,
         "credit_applied_kwh": 0,
-        "ending_credit_kwh": 2839.629810491384,
-        "credit_bank_change_kwh": 1199.4749145199403,
+        "ending_credit_kwh": 2779.7184678884923,
+        "credit_bank_change_kwh": 1197.207086933734,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -290,22 +322,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 981.627553773385,
-        "optimistic_ending_credit_kwh": 3927.0031166784543
+        "conservative_ending_credit_kwh": 976.4956794129843,
+        "optimistic_ending_credit_kwh": 3868.156921483793
       },
       {
         "month": "June 2027",
         "solar_production_kwh": 2181.6244339506734,
-        "household_consumption_kwh": 930.4394505402828,
-        "normal_load_kwh": 793.7118362068965,
-        "cooling_load_kwh": 136.72761433338636,
+        "household_consumption_kwh": 931.3800241935485,
+        "normal_load_kwh": 795.9065080645162,
+        "cooling_load_kwh": 135.47351612903228,
         "heating_load_kwh": 0,
-        "predicted_m01_kwh": 330.71326508620683,
-        "predicted_m02_kwh": 1581.8982484965977,
-        "net_usage_kwh": -1251.184983410391,
+        "predicted_m01_kwh": 331.62771169354835,
+        "predicted_m02_kwh": 1581.8721214506736,
+        "net_usage_kwh": -1250.2444097571251,
         "credit_applied_kwh": 0,
-        "ending_credit_kwh": 4090.814793901775,
-        "credit_bank_change_kwh": 1251.184983410391,
+        "ending_credit_kwh": 4029.9628776456175,
+        "credit_bank_change_kwh": 1250.2444097571251,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -314,22 +346,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 1700.5542214916122,
-        "optimistic_ending_credit_kwh": 5470.785699527135
+        "conservative_ending_credit_kwh": 1694.3406874299558,
+        "optimistic_ending_credit_kwh": 5411.07417657147
       },
       {
         "month": "July 2027",
         "solar_production_kwh": 2189.700705257276,
-        "household_consumption_kwh": 1138.0606007389163,
-        "normal_load_kwh": 820.1688974137929,
-        "cooling_load_kwh": 317.8917033251233,
+        "household_consumption_kwh": 1137.41265,
+        "normal_load_kwh": 822.436725,
+        "cooling_load_kwh": 314.975925,
         "heating_load_kwh": 0,
-        "predicted_m01_kwh": 341.7370405890804,
-        "predicted_m02_kwh": 1393.3771451074404,
-        "net_usage_kwh": -1051.64010451836,
+        "predicted_m01_kwh": 342.68196874999995,
+        "predicted_m02_kwh": 1394.9700240072762,
+        "net_usage_kwh": -1052.2880552572763,
         "credit_applied_kwh": 0,
-        "ending_credit_kwh": 5142.454898420135,
-        "credit_bank_change_kwh": 1051.6401045183597,
+        "ending_credit_kwh": 5082.2509329028935,
+        "credit_bank_change_kwh": 1052.288055257276,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -338,21 +370,21 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 2187.339108952825,
-        "optimistic_ending_credit_kwh": 6832.440722630336
+        "conservative_ending_credit_kwh": 2181.870718240922,
+        "optimistic_ending_credit_kwh": 6773.325314354474
       },
       {
         "month": "August 2027",
         "solar_production_kwh": 1867.05875484653,
-        "household_consumption_kwh": 1067.418,
-        "normal_load_kwh": 820.1688974137929,
-        "cooling_load_kwh": 247.24910258620702,
+        "household_consumption_kwh": 1067.4180000000001,
+        "normal_load_kwh": 822.436725,
+        "cooling_load_kwh": 244.98127500000004,
         "heating_load_kwh": 0,
-        "predicted_m01_kwh": 383.9927288268577,
-        "predicted_m02_kwh": 1183.6334836733874,
+        "predicted_m01_kwh": 385.09011269681065,
+        "predicted_m02_kwh": 1184.7308675433403,
         "net_usage_kwh": -799.6407548465297,
         "credit_applied_kwh": 0,
-        "ending_credit_kwh": 5942.095653266664,
+        "ending_credit_kwh": 5881.891687749423,
         "credit_bank_change_kwh": 799.6407548465295,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
@@ -362,22 +394,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 2490.7965879269796,
-        "optimistic_ending_credit_kwh": 7904.180792961519
+        "conservative_ending_credit_kwh": 2485.328197215076,
+        "optimistic_ending_credit_kwh": 7845.065384685657
       },
       {
         "month": "September 2027",
         "solar_production_kwh": 1398.802396876917,
-        "household_consumption_kwh": 799.1118362068964,
-        "normal_load_kwh": 793.7118362068965,
+        "household_consumption_kwh": 801.3065080645162,
+        "normal_load_kwh": 795.9065080645162,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 5.3999999999999995,
-        "predicted_m01_kwh": 410.9917838558336,
-        "predicted_m02_kwh": 1010.6823445258544,
-        "net_usage_kwh": -599.6905606700209,
+        "predicted_m01_kwh": 412.2720091061119,
+        "predicted_m02_kwh": 1009.7678979185127,
+        "net_usage_kwh": -597.4958888124008,
         "credit_applied_kwh": 0,
-        "ending_credit_kwh": 6541.786213936685,
-        "credit_bank_change_kwh": 599.6905606700211,
+        "ending_credit_kwh": 6479.387576561824,
+        "credit_bank_change_kwh": 597.4958888124011,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -386,22 +418,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 2718.835941728121,
-        "optimistic_ending_credit_kwh": 8707.680540215782
+        "conservative_ending_credit_kwh": 2710.843678379955,
+        "optimistic_ending_credit_kwh": 8646.546033830911
       },
       {
         "month": "October 2027",
         "solar_production_kwh": 1017.8051693972658,
-        "household_consumption_kwh": 887.128897413793,
-        "normal_load_kwh": 820.1688974137929,
+        "household_consumption_kwh": 889.3967250000001,
+        "normal_load_kwh": 822.436725,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 66.96000000000001,
-        "predicted_m01_kwh": 519.4718568247124,
-        "predicted_m02_kwh": 650.1481288081854,
-        "net_usage_kwh": -130.67627198347304,
+        "predicted_m01_kwh": 520.8584977399372,
+        "predicted_m02_kwh": 649.266942137203,
+        "net_usage_kwh": -128.40844439726584,
         "credit_applied_kwh": 0,
-        "ending_credit_kwh": 6672.4624859201585,
-        "credit_bank_change_kwh": 130.67627198347327,
+        "ending_credit_kwh": 6607.79602095909,
+        "credit_bank_change_kwh": 128.40844439726607,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -410,22 +442,22 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 2533.2379486080167,
-        "optimistic_ending_credit_kwh": 9011.107640932085
+        "conservative_ending_credit_kwh": 2522.6376835357123,
+        "optimistic_ending_credit_kwh": 8947.886733167903
       },
       {
         "month": "November 2027",
         "solar_production_kwh": 604.9025991624451,
-        "household_consumption_kwh": 912.5118362068964,
-        "normal_load_kwh": 793.7118362068965,
+        "household_consumption_kwh": 914.7065080645161,
+        "normal_load_kwh": 795.9065080645162,
         "cooling_load_kwh": 0,
         "heating_load_kwh": 118.79999999999998,
-        "predicted_m01_kwh": 594.2472899262965,
-        "predicted_m02_kwh": 286.6380528818453,
-        "net_usage_kwh": 307.6092370444512,
-        "credit_applied_kwh": 307.6092370444512,
-        "ending_credit_kwh": 6364.853248875707,
-        "credit_bank_change_kwh": -307.6092370444512,
+        "predicted_m01_kwh": 595.8018491587773,
+        "predicted_m02_kwh": 285.9979402567063,
+        "net_usage_kwh": 309.803908902071,
+        "credit_applied_kwh": 309.803908902071,
+        "ending_credit_kwh": 6297.992112057019,
+        "credit_bank_change_kwh": -309.80390890207127,
         "estimated_charges": 0,
         "chargeable_kwh": 0,
         "projected_delivery_charges": 0,
@@ -434,19 +466,19 @@
         "projected_recurring_fees": 0.9499999999999998,
         "minimum_monthly_amount_due": 43.57,
         "estimated_amount_due": 43.57,
-        "conservative_ending_credit_kwh": 1979.8694682832909,
-        "optimistic_ending_credit_kwh": 8836.98961070043
+        "conservative_ending_credit_kwh": 1966.745330574724,
+        "optimistic_ending_credit_kwh": 8771.749604827239
       }
     ],
     "confidence": "Limited winter history — medium confidence for the next 90 days; lower beyond that.",
-    "calibration_date": "2026-11-15",
+    "calibration_date": "2026-11-16",
     "assumptions": "Measured Sunrun production calibrated to Yorktown solar elevation and daylight. Household demand uses separate normal, cooling, and heating components; optional electric heat is not assumed to run continuously.",
     "demand_calibration": {
       "august_kwh_per_day": 34.43283870967742,
       "september_kwh_per_day": 26.952949999999998,
-      "october_kwh_per_day": 25.9611724137931,
-      "normal_kwh_per_day": 26.457061206896547,
-      "cooling_kwh_per_cdd": 1.139396786111553,
+      "october_kwh_per_day": 26.10748387096774,
+      "normal_kwh_per_day": 26.53021693548387,
+      "cooling_kwh_per_cdd": 1.1289459677419356,
       "heating_kwh_per_hdd": 0.18
     },
     "annual_solar_validation": {
@@ -458,13 +490,13 @@
     "reconciliation": {
       "official_balance_date": "2026-11-05",
       "official_balance_kwh": 2210,
-      "actual_interval_through": "2026-11-15",
+      "actual_interval_through": "2026-11-16",
       "forecast_start": "2026-12-01",
       "annual_settlement_status": "No NYSEG annual settlement, expiration, or conversion rule is configured. The forecast preserves kWh credits until an official statement or confirmed tariff rule changes them."
     },
     "validation": {
-      "overlap_days": 105,
-      "reconciled_days": 105,
+      "overlap_days": 108,
+      "reconciled_days": 108,
       "m02_above_production_days": 0,
       "invalid_days": 0
     },
@@ -472,7 +504,7 @@
   },
   "more_bills": {
     "source_folder": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\NYSEG Bill\\Bills\\More Bills",
-    "scanned_at": "2026-11-18",
+    "scanned_at": "2026-11-19",
     "total_pdf_files": 19,
     "unique_bill_count": 19,
     "authoritative_count": 17,
@@ -1077,21 +1109,21 @@
       "billing_start_date": "2026-11-04",
       "billing_end_date": "2026-12-03",
       "days_in_period": 30,
-      "measured_through_date": "2026-11-15",
-      "measured_days": 12,
-      "remaining_forecast_days": 18,
-      "measured_m01_kwh": 242.2,
-      "measured_m02_kwh": 104,
-      "projected_m01_kwh": 648,
-      "projected_m02_kwh": 196.4,
-      "projected_net_import_kwh": 451.6,
+      "measured_through_date": "2026-11-16",
+      "measured_days": 13,
+      "remaining_forecast_days": 17,
+      "measured_m01_kwh": 299.3,
+      "measured_m02_kwh": 114.5,
+      "projected_m01_kwh": 683.5,
+      "projected_m02_kwh": 201.5,
+      "projected_net_import_kwh": 482,
       "projected_energy_charge": 43.57,
       "minimum_charge_floor": 43.57,
       "chargeable_kwh": 0,
       "credit_bank_before_kwh": 2210,
-      "credit_bank_after_kwh": 1758.4,
-      "credit_bank_delta_kwh": -451.6,
-      "summary": "Projected bill (2026-11-04 to 2026-12-03): $43.57 energy charge • Bank shifts 2,210 -> 1,758 kWh (-451.6 kWh)"
+      "credit_bank_after_kwh": 1728,
+      "credit_bank_delta_kwh": -482,
+      "summary": "Projected bill (2026-11-04 to 2026-12-03): $43.57 energy charge • Bank shifts 2,210 -> 1,728 kWh (-482.0 kWh)"
     },
     "historical_usage_analysis": [
       {
@@ -1352,22 +1384,22 @@
     "next_bill_estimate": {
       "available": true,
       "period_start": "2026-11-04",
-      "period_end": "2026-11-15",
-      "days": 11,
-      "imported_kwh": 242.185,
-      "exported_kwh": 103.97500000000001,
-      "net_export_kwh": -138.20999999999998,
+      "period_end": "2026-11-16",
+      "days": 13,
+      "imported_kwh": 299.3189999999999,
+      "exported_kwh": 114.512,
+      "net_export_kwh": -184.8069999999999,
       "solar_adjusted_rate": 0.0997025171624714,
-      "projected_energy_charges": 24.146454118993134,
-      "projected_new_charges": 25.096454118993133,
+      "projected_energy_charges": 29.842857734553764,
+      "projected_new_charges": 30.792857734553763,
       "expected_prior_credit_bank_kwh": 2210,
       "current_net_export_kwh": 0,
       "projected_credit_bank_kwh": 2210,
       "posted_credit_bank_kwh": 2210,
       "credit_bank_gap_kwh": 0,
-      "calculation_tooltip": "Estimated next-bill calculation (not an NYSEG invoice):\nUnbilled interval window: 2026-11-04 through 2026-11-15 (11 days)\nM01 grid import: 242.2 kWh\nM02 solar export: 104.0 kWh\nM02 - M01 net meter flow: -138.2 kWh\n---\nRate basis: latest corrected bill, $43.57 on 437 kWh M01\nDelivery rate: $40.99 / 437 kWh = $0.0938/kWh\nSupply rate: $0.00 / 437 kWh = $0.0000/kWh\nTax rate: $2.58 / 437 kWh = $0.0059/kWh\n---\nDelivery: 242.2 kWh x $0.0938/kWh = $22.72\nSupply: 242.2 kWh x $0.0000/kWh = $0.00\nTaxes and surcharges: 242.2 kWh x $0.0059/kWh = $1.43\nEstimated energy charges: $24.15\nPayment/billing service charge: $0.95\n---\nEstimated new charges: $25.10\nSolar assumption: the latest corrected bill applied a solar offset and showed $0.00 supply charges. NYSEG determines the official credit treatment.\n---\nProjected credit-bank working ledger:\nPrior excess shown on corrected bill: 2,056.0 kWh\nCurrent M02 generation on corrected bill: +591.0 kWh\nLess NYSEG offset against billed M01: -437.0 kWh\nExpected balance after corrected bill: 2,210.0 kWh\nCurrent-period M02 - M01 net export: +0.0 kWh\nProjected credit-bank balance: 2,210.0 kWh\nNYSEG currently posted: 2,210.0 kWh\nBalance to ask NYSEG to explain: 0.0 kWh\nThis is the expected kWh ledger, assuming net exported kWh becomes credit; it is not an official NYSEG bank posting.\nEstimated statement date: 2026-11-20 (five days after the interval period)\nNYSEG's bills say payment is due upon receipt. Prior balance and payment-plan amounts are excluded.",
-      "estimated_statement_date": "2026-11-20",
-      "due_date_label": "Due upon receipt (about Nov 20, 2026)",
+      "calculation_tooltip": "Estimated next-bill calculation (not an NYSEG invoice):\nUnbilled interval window: 2026-11-04 through 2026-11-16 (13 days)\nM01 grid import: 299.3 kWh\nM02 solar export: 114.5 kWh\nM02 - M01 net meter flow: -184.8 kWh\n---\nRate basis: latest corrected bill, $43.57 on 437 kWh M01\nDelivery rate: $40.99 / 437 kWh = $0.0938/kWh\nSupply rate: $0.00 / 437 kWh = $0.0000/kWh\nTax rate: $2.58 / 437 kWh = $0.0059/kWh\n---\nDelivery: 299.3 kWh x $0.0938/kWh = $28.08\nSupply: 299.3 kWh x $0.0000/kWh = $0.00\nTaxes and surcharges: 299.3 kWh x $0.0059/kWh = $1.77\nEstimated energy charges: $29.84\nPayment/billing service charge: $0.95\n---\nEstimated new charges: $30.79\nSolar assumption: the latest corrected bill applied a solar offset and showed $0.00 supply charges. NYSEG determines the official credit treatment.\n---\nProjected credit-bank working ledger:\nPrior excess shown on corrected bill: 2,056.0 kWh\nCurrent M02 generation on corrected bill: +591.0 kWh\nLess NYSEG offset against billed M01: -437.0 kWh\nExpected balance after corrected bill: 2,210.0 kWh\nCurrent-period M02 - M01 net export: +0.0 kWh\nProjected credit-bank balance: 2,210.0 kWh\nNYSEG currently posted: 2,210.0 kWh\nBalance to ask NYSEG to explain: 0.0 kWh\nThis is the expected kWh ledger, assuming net exported kWh becomes credit; it is not an official NYSEG bank posting.\nEstimated statement date: 2026-11-21 (five days after the interval period)\nNYSEG's bills say payment is due upon receipt. Prior balance and payment-plan amounts are excluded.",
+      "estimated_statement_date": "2026-11-21",
+      "due_date_label": "Due upon receipt (about Nov 21, 2026)",
       "seasonal_reference_label": "Nov 2025",
       "seasonal_reference_kwh": 523,
       "seasonal_reference_cost": 139.51
@@ -1799,6 +1831,24 @@
   },
   "daily_rows": [
     {
+      "id": "SR-9134",
+      "date": "2026-11-19",
+      "solar_kwh": 0,
+      "eod_meter_kwh": 6153.549,
+      "m01_import_kwh": null,
+      "m02_export_kwh": null,
+      "credit_delta": null,
+      "temp_f": null,
+      "temp_min_f": null,
+      "temp_max_f": null,
+      "irradiance_wm2": null,
+      "nyseg_hours": 0,
+      "irradiance": "Pending",
+      "status": "PENDING_TELEMETRY",
+      "note": "Awaiting daily 7:30 AM telemetry sync",
+      "hourly": null
+    },
+    {
       "id": "SR-9133",
       "date": "2026-11-18",
       "solar_kwh": 0,
@@ -1839,18 +1889,115 @@
       "date": "2026-11-16",
       "solar_kwh": 0,
       "eod_meter_kwh": 6153.549,
-      "m01_import_kwh": null,
-      "m02_export_kwh": null,
-      "credit_delta": null,
-      "temp_f": null,
+      "m01_import_kwh": 25.389,
+      "m02_export_kwh": 9.342,
+      "credit_delta": -16.047,
+      "temp_f": 42,
       "temp_min_f": 31,
       "temp_max_f": 52,
       "irradiance_wm2": 498,
-      "nyseg_hours": 0,
+      "nyseg_hours": 24,
       "irradiance": "Clear sky",
-      "status": "PENDING_TELEMETRY",
-      "note": "Awaiting daily 7:30 AM telemetry sync",
-      "hourly": null
+      "status": "RECONCILED",
+      "note": "",
+      "hourly": [
+        [
+          0.588,
+          0
+        ],
+        [
+          0.529,
+          0
+        ],
+        [
+          0.556,
+          0
+        ],
+        [
+          0.519,
+          0
+        ],
+        [
+          0.466,
+          0
+        ],
+        [
+          0.466,
+          0
+        ],
+        [
+          0.503,
+          0
+        ],
+        [
+          0.192,
+          0.08
+        ],
+        [
+          2.442,
+          0.04
+        ],
+        [
+          2.745,
+          0
+        ],
+        [
+          1.147,
+          0.304
+        ],
+        [
+          0,
+          3.495
+        ],
+        [
+          0,
+          2.843
+        ],
+        [
+          0.012,
+          1.509
+        ],
+        [
+          0.259,
+          0.611
+        ],
+        [
+          0.549,
+          0.46
+        ],
+        [
+          2.726,
+          0
+        ],
+        [
+          3.233,
+          0
+        ],
+        [
+          2.377,
+          0
+        ],
+        [
+          1.506,
+          0
+        ],
+        [
+          1.804,
+          0
+        ],
+        [
+          0.98,
+          0
+        ],
+        [
+          0.799,
+          0
+        ],
+        [
+          0.991,
+          0
+        ]
+      ]
     },
     {
       "id": "SR-9130",
@@ -2087,18 +2234,115 @@
       "date": "2026-11-13",
       "solar_kwh": 10.995,
       "eod_meter_kwh": 6108.311,
-      "m01_import_kwh": null,
-      "m02_export_kwh": null,
-      "credit_delta": null,
-      "temp_f": null,
+      "m01_import_kwh": 31.745,
+      "m02_export_kwh": 1.195,
+      "credit_delta": -30.55,
+      "temp_f": 38,
       "temp_min_f": 35,
       "temp_max_f": 44,
       "irradiance_wm2": 120,
-      "nyseg_hours": 0,
+      "nyseg_hours": 24,
       "irradiance": "Heavy drizzle",
-      "status": "SUNRUN_ONLY",
-      "note": "Sunrun production verified; NYSEG hourly interval export pending for this date",
-      "hourly": null
+      "status": "RECONCILED",
+      "note": "",
+      "hourly": [
+        [
+          0.467,
+          0
+        ],
+        [
+          0.44,
+          0
+        ],
+        [
+          0.558,
+          0
+        ],
+        [
+          0.485,
+          0
+        ],
+        [
+          0.364,
+          0
+        ],
+        [
+          0.365,
+          0
+        ],
+        [
+          1.835,
+          0
+        ],
+        [
+          2.938,
+          0
+        ],
+        [
+          3.039,
+          0
+        ],
+        [
+          0.818,
+          0
+        ],
+        [
+          0.753,
+          0.264
+        ],
+        [
+          0.161,
+          0.576
+        ],
+        [
+          0.935,
+          0.113
+        ],
+        [
+          0.947,
+          0.17
+        ],
+        [
+          1.476,
+          0.018
+        ],
+        [
+          1.056,
+          0.054
+        ],
+        [
+          1.754,
+          0
+        ],
+        [
+          2.298,
+          0
+        ],
+        [
+          2.925,
+          0
+        ],
+        [
+          3.833,
+          0
+        ],
+        [
+          1.473,
+          0
+        ],
+        [
+          0.702,
+          0
+        ],
+        [
+          0.72,
+          0
+        ],
+        [
+          1.403,
+          0
+        ]
+      ]
     },
     {
       "id": "SR-9127",
@@ -3600,36 +3844,230 @@
       "date": "2026-10-30",
       "solar_kwh": 28.138,
       "eod_meter_kwh": 5796.373,
-      "m01_import_kwh": null,
-      "m02_export_kwh": null,
-      "credit_delta": null,
-      "temp_f": null,
+      "m01_import_kwh": 17.805,
+      "m02_export_kwh": 19.391,
+      "credit_delta": 1.586,
+      "temp_f": 56,
       "temp_min_f": 45,
       "temp_max_f": 69,
       "irradiance_wm2": 575,
-      "nyseg_hours": 0,
+      "nyseg_hours": 24,
       "irradiance": "Overcast",
-      "status": "SUNRUN_ONLY",
-      "note": "Sunrun production verified; NYSEG hourly interval export pending for this date",
-      "hourly": null
+      "status": "RECONCILED",
+      "note": "",
+      "hourly": [
+        [
+          0.593,
+          0
+        ],
+        [
+          0.558,
+          0
+        ],
+        [
+          0.608,
+          0
+        ],
+        [
+          0.397,
+          0
+        ],
+        [
+          0.364,
+          0
+        ],
+        [
+          0.356,
+          0
+        ],
+        [
+          2.596,
+          0
+        ],
+        [
+          1.743,
+          0
+        ],
+        [
+          1.793,
+          0
+        ],
+        [
+          1.431,
+          0
+        ],
+        [
+          0.207,
+          0.089
+        ],
+        [
+          0.146,
+          0.568
+        ],
+        [
+          0.112,
+          2.988
+        ],
+        [
+          0,
+          6.202
+        ],
+        [
+          0,
+          4.699
+        ],
+        [
+          0,
+          2.947
+        ],
+        [
+          0,
+          1.882
+        ],
+        [
+          1.019,
+          0.016
+        ],
+        [
+          1.48,
+          0
+        ],
+        [
+          1.29,
+          0
+        ],
+        [
+          1.066,
+          0
+        ],
+        [
+          0.81,
+          0
+        ],
+        [
+          0.628,
+          0
+        ],
+        [
+          0.608,
+          0
+        ]
+      ]
     },
     {
       "id": "SR-9113",
       "date": "2026-10-29",
       "solar_kwh": 27.41,
       "eod_meter_kwh": 5768.235,
-      "m01_import_kwh": null,
-      "m02_export_kwh": null,
-      "credit_delta": null,
-      "temp_f": null,
+      "m01_import_kwh": 16.702,
+      "m02_export_kwh": 14.206,
+      "credit_delta": -2.496,
+      "temp_f": 53,
       "temp_min_f": 40,
       "temp_max_f": 66,
       "irradiance_wm2": 534,
-      "nyseg_hours": 0,
+      "nyseg_hours": 24,
       "irradiance": "Overcast",
-      "status": "SUNRUN_ONLY",
-      "note": "Sunrun production verified; NYSEG hourly interval export pending for this date",
-      "hourly": null
+      "status": "RECONCILED",
+      "note": "",
+      "hourly": [
+        [
+          0.694,
+          0
+        ],
+        [
+          0.489,
+          0
+        ],
+        [
+          0.582,
+          0
+        ],
+        [
+          0.463,
+          0
+        ],
+        [
+          0.354,
+          0
+        ],
+        [
+          0.355,
+          0
+        ],
+        [
+          0.335,
+          0
+        ],
+        [
+          0.568,
+          0
+        ],
+        [
+          1.413,
+          0
+        ],
+        [
+          1.115,
+          0.035
+        ],
+        [
+          0.033,
+          0.67
+        ],
+        [
+          0.034,
+          0.892
+        ],
+        [
+          0.025,
+          3.471
+        ],
+        [
+          1.816,
+          1.989
+        ],
+        [
+          0,
+          4.1
+        ],
+        [
+          0.011,
+          1.855
+        ],
+        [
+          0.111,
+          1.194
+        ],
+        [
+          1.255,
+          0
+        ],
+        [
+          2.671,
+          0
+        ],
+        [
+          1.254,
+          0
+        ],
+        [
+          0.874,
+          0
+        ],
+        [
+          0.801,
+          0
+        ],
+        [
+          0.683,
+          0
+        ],
+        [
+          0.766,
+          0
+        ]
+      ]
     },
     {
       "id": "SR-9112",
