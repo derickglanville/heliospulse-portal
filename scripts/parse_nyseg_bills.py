@@ -237,12 +237,19 @@ HISTORICAL_USAGE_ANALYSIS_BASELINE: tuple[dict[str, Any], ...] = (
 def _build_historical_usage_analysis_rows(authoritative_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = [dict(row) for row in HISTORICAL_USAGE_ANALYSIS_BASELINE]
     latest_baseline_end = max(row["billing_end_date"] for row in rows)
-    seen_periods = {(row["billing_start_date"], row["billing_end_date"]): idx for idx, row in enumerate(rows)}
+    seen_periods = {
+        (row["billing_start_date"], row["billing_end_date"]): idx
+        for idx, row in enumerate(rows)
+        if not row.get("combined_period")
+    }
 
     for record in authoritative_records:
         start = str(record.get("billing_start_date") or "")
         end = str(record.get("billing_end_date") or "")
-        if not start or not end or end <= latest_baseline_end:
+        if not start or not end:
+            continue
+        key = (start, end)
+        if key not in seen_periods and end <= latest_baseline_end:
             continue
         usage = float(record.get("imported_kwh") or 0.0)
         charges = float(record.get("total_energy_charges") or 0.0)
