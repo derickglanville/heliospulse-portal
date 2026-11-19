@@ -226,6 +226,16 @@ function HeliosPulsePortalInner() {
     }
   });
   const [bannerCleared, setBannerCleared] = useState(false);
+  const [showAlertLogModal, setShowAlertLogModal] = useState(false);
+  const [alertLogFilter, setAlertLogFilter] = useState('all'); // 'all' | 'active' | 'canceled'
+  const [persistedAlertLog, setPersistedAlertLog] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('heliospulse_alert_lookup_log');
+      return Array.isArray(JSON.parse(saved || '[]')) ? JSON.parse(saved || '[]') : [];
+    } catch {
+      return [];
+    }
+  });
   const [aiHoverOpen, setAiHoverOpen] = useState(false);
   const aiHoverCloseTimerRef = useRef(null);
   const openAiHoverMenu = () => {
@@ -795,7 +805,7 @@ function HeliosPulsePortalInner() {
     }
   };
 
-  const combinedAlerts = useMemo(() => {
+  const allDetectedAlerts = useMemo(() => {
     const merged = [...appRuntimeIssues, ...(telemetryAlerts || [])];
     const hasCode = (c) => merged.some((a) => a.code === c);
 
@@ -826,11 +836,98 @@ function HeliosPulsePortalInner() {
       });
     }
 
-    return merged.filter((a) => {
+    return merged;
+  }, [appRuntimeIssues, telemetryAlerts, solarRows]);
+
+  // Keep a durable lookup log of every detected alert (including canceled/cleared items)
+  useEffect(() => {
+    if (!allDetectedAlerts.length) return;
+    const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    setPersistedAlertLog((prev) => {
+      const byKey = new Map(prev.map((item) => [item.key, { ...item }]));
+      let changed = false;
+      for (const a of allDetectedAlerts) {
+        const key = getAlertKey(a);
+        const existing = byKey.get(key);
+        if (!existing) {
+          byKey.set(key, {
+            key,
+            code: a.code,
+            severity: a.severity,
+            title: a.title,
+            message: a.message,
+            dates: a.dates || [],
+            first_seen_at: nowIso,
+            last_seen_at: nowIso,
+          });
+          changed = true;
+        } else if (existing.message !== a.message || existing.title !== a.title) {
+          byKey.set(key, {
+            ...existing,
+            severity: a.severity,
+            title: a.title,
+            message: a.message,
+            dates: a.dates || [],
+            last_seen_at: nowIso,
+          });
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      const next = [...byKey.values()].slice(0, 50);
+      try {
+        window.localStorage.setItem('heliospulse_alert_lookup_log', JSON.stringify(next));
+      } catch {
+        // Ignore storage limits
+      }
+      return next;
+    });
+  }, [allDetectedAlerts]);
+
+  const combinedAlerts = useMemo(() => {
+    return allDetectedAlerts.filter((a) => {
       const k = getAlertKey(a);
       return !dismissedAlertKeys.includes(k) && !canceledAlertKeys.includes(k);
     });
-  }, [appRuntimeIssues, telemetryAlerts, solarRows, dismissedAlertKeys, canceledAlertKeys]);
+  }, [allDetectedAlerts, dismissedAlertKeys, canceledAlertKeys]);
+
+  const alertLookupEntries = useMemo(() => {
+    const map = new Map(persistedAlertLog.map((item) => [item.key, { ...item }]));
+    const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    for (const a of allDetectedAlerts) {
+      const k = getAlertKey(a);
+      if (!map.has(k)) {
+        map.set(k, {
+          key: k,
+          code: a.code,
+          severity: a.severity,
+          title: a.title,
+          message: a.message,
+          dates: a.dates || [],
+          first_seen_at: nowIso,
+          last_seen_at: nowIso,
+        });
+      }
+    }
+    return [...map.values()].map((entry) => {
+      const isCanceled = canceledAlertKeys.includes(entry.key);
+      const isSessionCleared = dismissedAlertKeys.includes(entry.key);
+      const isCurrentlyActive = allDetectedAlerts.some((a) => getAlertKey(a) === entry.key);
+      return {
+        ...entry,
+        isCanceled,
+        isSessionCleared,
+        isCurrentlyActive,
+        logStatus: isCanceled
+          ? 'Canceled'
+          : isSessionCleared
+          ? 'Cleared (Session)'
+          : isCurrentlyActive
+          ? 'Active'
+          : 'Resolved',
+      };
+    });
+  }, [persistedAlertLog, allDetectedAlerts, canceledAlertKeys, dismissedAlertKeys]);
 
   const persistCanceledAlertKeys = (nextKeys) => {
     try {
@@ -883,6 +980,136 @@ function HeliosPulsePortalInner() {
     setBannerCleared(true);
     const sig = notificationStatus?.last_checked_at || notificationStatus?.recent_email_events?.[0]?.sent_at || 'closed';
     persistCanceledBannerSig(sig);
+  };
+
+  const handleRestoreAlertKey = (key) => {
+    setCanceledAlertKeys((prev) => {
+      const next = prev.filter((k) => k !== key);
+      persistCanceledAlertKeys(next);
+      return next;
+    });
+    setDismissedAlertKeys((prev) => prev.filter((k) => k !== key));
+    persistCanceledBannerSig('');
+    setBannerCleared(false);
+  };
+
+  const renderAlertLookupPanel = () => {
+    const filteredLookup = alertLookupEntries.filter((entry) => {
+      if (alertLogFilter === 'active') return entry.logStatus === 'Active';
+      if (alertLogFilter === 'canceled') return entry.isCanceled || entry.isSessionCleared;
+      return true;
+    });
+    return (
+      <div className={`rounded-2xl border p-5 sm:p-6 space-y-4 ${cardBg}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-bold text-sm flex items-center gap-2">
+              <Bell className="w-4 h-4 text-[#e07a16]" />
+              <span>Anomaly, Issue &amp; Alert Lookup Log ({alertLookupEntries.length})</span>
+            </h3>
+            <p className={`text-xs mt-0.5 ${mutedText}`}>
+              Persistent lookup history of all detected data anomalies, app issues, and email dispatches (including permanently canceled alerts).
+            </p>
+          </div>
+
+          <div className={`flex rounded-full p-1 border text-xs ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#efece4] border-[#dcd8ce]'}`}>
+            {[
+              { id: 'all', label: `All (${alertLookupEntries.length})` },
+              { id: 'active', label: `Active (${alertLookupEntries.filter((e) => e.logStatus === 'Active').length})` },
+              { id: 'canceled', label: `Canceled (${alertLookupEntries.filter((e) => e.isCanceled || e.isSessionCleared).length})` },
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setAlertLogFilter(f.id)}
+                className={`px-3 py-1 rounded-full transition cursor-pointer ${
+                  alertLogFilter === f.id
+                    ? darkMode
+                      ? 'bg-amber-400 text-slate-950 font-semibold'
+                      : 'bg-[#1a1917] text-white font-semibold'
+                    : mutedText
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={`divide-y ${dividerBorder}`}>
+          {filteredLookup.length === 0 ? (
+            <div className={`py-4 text-xs text-center ${mutedText}`}>
+              No alerts match the selected filter.
+            </div>
+          ) : (
+            filteredLookup.map((entry) => (
+              <div key={entry.key} className="py-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3 text-xs">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        entry.severity === 'error'
+                          ? 'bg-[#b91c1c] text-white'
+                          : 'bg-[#e07a16] text-white'
+                      }`}
+                    >
+                      {entry.severity === 'error' ? 'Issue' : 'Anomaly'}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        entry.logStatus === 'Active'
+                          ? 'bg-[#e07a16]/15 text-[#9a3412]'
+                          : entry.logStatus === 'Canceled'
+                          ? darkMode
+                            ? 'bg-slate-800 text-slate-300'
+                            : 'bg-[#efece4] text-[#5c5953]'
+                          : 'bg-[#1f7a4c]/15 text-[#1f7a4c]'
+                      }`}
+                    >
+                      {entry.logStatus}
+                    </span>
+                    <span className="font-mono text-[11px] font-semibold">{entry.code}</span>
+                  </div>
+                  <div className="font-semibold">{entry.title}</div>
+                  <div className={mutedText}>{entry.message}</div>
+                  <div className={`text-[10px] font-mono ${mutedText}`}>
+                    First seen: {entry.first_seen_at} · Last seen: {entry.last_seen_at}
+                  </div>
+                </div>
+
+                {(entry.isCanceled || entry.isSessionCleared) && entry.isCurrentlyActive && (
+                  <button
+                    type="button"
+                    onClick={() => handleRestoreAlertKey(entry.key)}
+                    className={`px-3 py-1 rounded-full border text-[11px] font-semibold shrink-0 cursor-pointer ${pillBtnSecondary}`}
+                    title="Show this alert again in the top banner"
+                  >
+                    Restore to Banner
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {(notificationStatus?.recent_email_events?.length || 0) > 0 && (
+          <div className={`pt-3 border-t space-y-1.5 ${dividerBorder}`}>
+            <div className={`text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5 ${mutedText}`}>
+              <Mail className="w-3 h-3 text-[#1f7a4c]" />
+              <span>Email Dispatch Log (dglanville@gmail.com)</span>
+            </div>
+            {notificationStatus.recent_email_events.slice(0, 8).map((ev, idx) => (
+              <div key={idx} className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+                <span className="truncate">{ev.subject}</span>
+                <span className={ev.status === 'sent' ? 'text-[#1f7a4c]' : 'text-[#b91c1c]'}>
+                  {ev.status === 'sent' ? `Sent ${ev.sent_at}` : `Error: ${ev.error}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const triggerSyncPipeline = async () => {
@@ -2108,6 +2335,19 @@ function HeliosPulsePortalInner() {
                     </div>
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAlertLogModal(true)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${pillBtnSecondary}`}
+                  title="Open Alert & Anomaly Lookup Log (includes canceled alerts)"
+                >
+                  <Bell className={`w-3 h-3 ${combinedAlerts.length > 0 ? 'text-[#e07a16]' : 'text-[#1f7a4c]'}`} />
+                  <span className="hidden sm:inline">Alert Log</span>
+                  {alertLookupEntries.length > 0 && (
+                    <span className="font-mono text-[10px] font-bold">({alertLookupEntries.length})</span>
+                  )}
+                </button>
 
                 <button
                   onClick={() => setDarkMode(!darkMode)}
@@ -3580,6 +3820,8 @@ function HeliosPulsePortalInner() {
                 </button>
               </div>
             </div>
+
+            {renderAlertLookupPanel()}
           </div>
         )}
 
@@ -3782,6 +4024,26 @@ function HeliosPulsePortalInner() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALERT & ANOMALY LOOKUP LOG MODAL */}
+      {showAlertLogModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`max-w-3xl w-full max-h-[85vh] overflow-y-auto rounded-2xl border p-5 sm:p-6 space-y-4 shadow-2xl ${cardBg}`}>
+            <div className="flex items-center justify-between">
+              <div className="font-bold text-sm">Alert &amp; Anomaly Lookup Log</div>
+              <button
+                type="button"
+                onClick={() => setShowAlertLogModal(false)}
+                className="cursor-pointer"
+                aria-label="Close Alert Lookup Log"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {renderAlertLookupPanel()}
           </div>
         </div>
       )}
