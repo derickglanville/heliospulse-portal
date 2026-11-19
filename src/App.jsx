@@ -891,7 +891,7 @@ function HeliosPulsePortalInner() {
       const origin = window.location.origin;
       const host = window.location.hostname;
       if (host === 'localhost' || host === '127.0.0.1' || origin.includes('github.io')) {
-        for (const candidate of ['http://127.0.0.1:5173', 'http://localhost:5173', 'http://127.0.0.1:4173', 'http://localhost:4173']) {
+        for (const candidate of ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173']) {
           if (candidate !== origin && !bases.includes(candidate)) {
             bases.push(candidate);
           }
