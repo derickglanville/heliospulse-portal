@@ -58,9 +58,11 @@ export default function NysegMonthlyBillsTab({
             className={`px-4 py-2 rounded-full border text-xs font-semibold transition cursor-pointer ${
               viewMode === 'historical'
                 ? darkMode
-                  ? 'bg-amber-400 text-slate-950 border-amber-400'
-                  : 'bg-[#1a1917] text-white border-[#1a1917]'
-                : pillBtnSecondary
+                  ? 'bg-sky-700 hover:bg-sky-600 text-white border-sky-500'
+                  : 'bg-[#93c5fd] hover:bg-[#60a5fa] text-[#0f172a] border-[#60a5fa]'
+                : darkMode
+                ? 'bg-sky-900/50 hover:bg-sky-800/60 text-sky-100 border-sky-700'
+                : 'bg-[#dbeafe] hover:bg-[#bfdbfe] text-[#1e3a8a] border-[#93c5fd]'
             }`}
             title="Toggle between current bills breakdown and Historical Usage Analysis"
           >
