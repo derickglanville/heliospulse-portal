@@ -2847,8 +2847,8 @@ function HeliosPulsePortalInner() {
               </div>
 
               {/* COLUMN 2: HOURLY ENERGY BALANCE */}
-              <div className={`rounded-2xl border p-5 flex flex-col justify-between ${cardBg}`}>
-                <div className="space-y-4">
+              <div className={`rounded-2xl border overflow-hidden flex flex-col ${cardBg}`}>
+                <div className="p-5 flex-1 flex flex-col gap-4">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>
@@ -2916,7 +2916,7 @@ function HeliosPulsePortalInner() {
                   </div>
 
                   {/* Legend using Solar Savings standard palette */}
-                  <div className="grid grid-cols-2 gap-1.5 text-xs pt-1">
+                  <div className="grid grid-cols-2 gap-1.5 text-xs">
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 rounded-xs bg-[#e07a16] inline-block" />
                       <span className={mutedText}>SunRun produced</span>
@@ -2934,77 +2934,121 @@ function HeliosPulsePortalInner() {
                       <span className={mutedText}>M02 exported</span>
                     </div>
                   </div>
-                </div>
 
-                {/* Diverging 24-Hour Bar Chart */}
-                <div className="pt-4 pb-2">
-                  <div className="relative h-56 flex">
-                    <div className={`w-6 flex flex-col justify-between text-[11px] font-mono text-right pr-1.5 py-1 ${mutedText}`}>
-                      <span>5</span>
-                      <span>0</span>
-                      <span>-5</span>
-                    </div>
+                  {/* Diverging 24-Hour Bar Chart expanding smoothly to fill vertical space */}
+                  <div className="flex-1 flex flex-col justify-between pt-2">
+                    <div className="relative flex-1 min-h-[250px] flex">
+                      <div className={`w-6 flex flex-col justify-between text-[11px] font-mono text-right pr-1.5 py-1 ${mutedText}`}>
+                        <span>5</span>
+                        <span>0</span>
+                        <span>-5</span>
+                      </div>
 
-                    <div className="flex-1 relative flex flex-col">
-                      <div className={`absolute inset-x-0 top-2 border-t ${dividerBorder}`} />
-                      <div className="absolute inset-x-0 top-1/2 border-t border-[#687076] z-10" />
-                      <div className={`absolute inset-x-0 bottom-2 border-t ${dividerBorder}`} />
+                      <div className="flex-1 relative flex flex-col">
+                        <div className={`absolute inset-x-0 top-2 border-t ${dividerBorder}`} />
+                        <div className="absolute inset-x-0 top-1/2 border-t border-[#687076] z-10" />
+                        <div className={`absolute inset-x-0 bottom-2 border-t ${dividerBorder}`} />
 
-                      <div className="flex-1 grid grid-cols-24 gap-[2px] items-center px-1">
-                        {hourlyBalanceData.map((d) => {
-                          const maxAxis = 5.5;
-                          const solarPct = Math.min(100, (d.solar / maxAxis) * 100);
-                          const m01Pct = Math.min(100 - solarPct, (d.m01 / maxAxis) * 100);
+                        <div className="flex-1 grid grid-cols-24 gap-[2px] items-center px-1">
+                          {hourlyBalanceData.map((d) => {
+                            const maxAxis = 5.5;
+                            const solarPct = Math.min(100, (d.solar / maxAxis) * 100);
+                            const m01Pct = Math.min(100 - solarPct, (d.m01 / maxAxis) * 100);
 
-                          const consPct = Math.min(100, (d.consumed / maxAxis) * 100);
-                          const m02Pct = Math.min(100 - consPct, (d.m02 / maxAxis) * 100);
+                            const consPct = Math.min(100, (d.consumed / maxAxis) * 100);
+                            const m02Pct = Math.min(100 - consPct, (d.m02 / maxAxis) * 100);
 
-                          return (
-                            <div
-                              key={d.hour}
-                              className="h-full flex flex-col group"
-                              title={`${d.hour}:00 • Solar: ${d.solar} kWh | M01 Imp: ${d.m01} kWh | Consumed: ${d.consumed} kWh | M02 Exp: ${d.m02} kWh`}
-                            >
-                              <div className="h-1/2 flex flex-col justify-end">
-                                {m01Pct > 0 && (
-                                  <div style={{ height: `${m01Pct}%` }} className="w-full bg-[#687076]" />
-                                )}
-                                {solarPct > 0 && (
-                                  <div style={{ height: `${solarPct}%` }} className="w-full bg-[#e07a16]" />
-                                )}
+                            return (
+                              <div
+                                key={d.hour}
+                                className="h-full flex flex-col group"
+                                title={`${d.hour}:00 • Solar: ${d.solar} kWh | M01 Imp: ${d.m01} kWh | Consumed: ${d.consumed} kWh | M02 Exp: ${d.m02} kWh`}
+                              >
+                                <div className="h-1/2 flex flex-col justify-end">
+                                  {m01Pct > 0 && (
+                                    <div style={{ height: `${m01Pct}%` }} className="w-full bg-[#687076]" />
+                                  )}
+                                  {solarPct > 0 && (
+                                    <div style={{ height: `${solarPct}%` }} className="w-full bg-[#e07a16]" />
+                                  )}
+                                </div>
+
+                                <div className="h-1/2 flex flex-col justify-start">
+                                  {consPct > 0 && (
+                                    <div style={{ height: `${consPct}%` }} className="w-full bg-[#b45309]" />
+                                  )}
+                                  {m02Pct > 0 && (
+                                    <div style={{ height: `${m02Pct}%` }} className="w-full bg-[#1f7a4c]" />
+                                  )}
+                                </div>
                               </div>
-
-                              <div className="h-1/2 flex flex-col justify-start">
-                                {consPct > 0 && (
-                                  <div style={{ height: `${consPct}%` }} className="w-full bg-[#b45309]" />
-                                )}
-                                {m02Pct > 0 && (
-                                  <div style={{ height: `${m02Pct}%` }} className="w-full bg-[#1f7a4c]" />
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className={`pl-6 grid grid-cols-8 text-[11px] font-mono pt-1 ${mutedText}`}>
-                    <span>12a</span>
-                    <span>3a</span>
-                    <span>6a</span>
-                    <span>9a</span>
-                    <span>12p</span>
-                    <span>3p</span>
-                    <span>6p</span>
-                    <span>9p</span>
+                    <div className={`pl-6 grid grid-cols-8 text-[11px] font-mono pt-1.5 ${mutedText}`}>
+                      <span>12a</span>
+                      <span>3a</span>
+                      <span>6a</span>
+                      <span>9a</span>
+                      <span>12p</span>
+                      <span>3p</span>
+                      <span>6p</span>
+                      <span>9p</span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Bottom Peak-Hour Summary Strip (Matches Column 1 Performance Sub-Panel) */}
+                {(() => {
+                  const fmtHr = (h) => (h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`);
+                  const peakOf = (key) =>
+                    hourlyBalanceData.reduce((best, cur) => (cur[key] > best[key] ? cur : best), hourlyBalanceData[0] || { hour: 12, [key]: 0 });
+                  const pSolar = peakOf('solar');
+                  const pExp = peakOf('m02');
+                  const pCons = peakOf('consumed');
+                  const pImp = peakOf('m01');
+                  return (
+                    <div className={`p-5 border-t space-y-3 ${subPanelBg}`}>
+                      <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>
+                        HOURLY PEAKS · {distDayMetrics.date}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <div className={mutedText}>Peak solar hour</div>
+                          <div className="font-mono font-bold text-[#e07a16] mt-0.5">
+                            {fmtHr(pSolar.hour)} · {Number(pSolar.solar || 0).toFixed(1)} kWh
+                          </div>
+                        </div>
+                        <div>
+                          <div className={mutedText}>Peak export (M02)</div>
+                          <div className="font-mono font-bold text-[#1f7a4c] mt-0.5">
+                            {fmtHr(pExp.hour)} · {Number(pExp.m02 || 0).toFixed(1)} kWh
+                          </div>
+                        </div>
+                        <div>
+                          <div className={mutedText}>Peak home load</div>
+                          <div className="font-mono font-bold mt-0.5">
+                            {fmtHr(pCons.hour)} · {Number(pCons.consumed || 0).toFixed(1)} kWh
+                          </div>
+                        </div>
+                        <div>
+                          <div className={mutedText}>Peak import (M01)</div>
+                          <div className="font-mono font-bold mt-0.5">
+                            {fmtHr(pImp.hour)} · {Number(pImp.m01 || 0).toFixed(1)} kWh
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* COLUMN 3: LIFETIME ENERGY */}
-              <div className={`rounded-2xl border p-5 flex flex-col justify-between ${cardBg}`}>
-                <div className="space-y-3.5">
+              <div className={`rounded-2xl border overflow-hidden flex flex-col ${cardBg}`}>
+                <div className="p-5 flex-1 flex flex-col gap-3.5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>
@@ -3109,35 +3153,56 @@ function HeliosPulsePortalInner() {
                       <span className={mutedText}>M02 exported</span>
                     </div>
                   </div>
-                </div>
 
-                <div className="pt-3 pb-1">
-                  <div className="relative h-44 flex">
-                    <div className={`w-10 flex flex-col justify-between text-[11px] font-mono text-right pr-2 py-2 ${mutedText}`}>
-                      <span>5000</span>
-                      <span>0</span>
-                      <span>-5000</span>
-                    </div>
+                  <div className="flex-1 flex flex-col justify-between pt-2">
+                    <div className="relative flex-1 min-h-[180px] flex">
+                      <div className={`w-10 flex flex-col justify-between text-[11px] font-mono text-right pr-2 py-2 ${mutedText}`}>
+                        <span>5000</span>
+                        <span>0</span>
+                        <span>-5000</span>
+                      </div>
 
-                    <div className="flex-1 relative flex flex-col justify-center items-center">
-                      <div className={`absolute inset-x-0 top-3 border-t ${dividerBorder}`} />
-                      <div className="absolute inset-x-0 top-1/2 border-t border-[#687076] z-10" />
-                      <div className={`absolute inset-x-0 bottom-3 border-t ${dividerBorder}`} />
+                      <div className="flex-1 relative flex flex-col justify-center items-center">
+                        <div className={`absolute inset-x-0 top-3 border-t ${dividerBorder}`} />
+                        <div className="absolute inset-x-0 top-1/2 border-t border-[#687076] z-10" />
+                        <div className={`absolute inset-x-0 bottom-3 border-t ${dividerBorder}`} />
 
-                      <div className="w-3/5 h-full flex flex-col">
-                        <div className="h-1/2 flex flex-col justify-end">
-                          <div style={{ height: '24%' }} className="w-full bg-[#687076]" title={`M01 Imported: ${Number(solarTotals.cumImp).toLocaleString()} kWh`} />
-                          <div style={{ height: '64%' }} className="w-full bg-[#e07a16]" title={`SunRun Produced: ${Number(solarTotals.cumSolarExact).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kWh (${solarTotals.cumSolarMwh} MWh)`} />
-                        </div>
-                        <div className="h-1/2 flex flex-col justify-start">
-                          <div style={{ height: '42%' }} className="w-full bg-[#b45309]" title={`EDC Consumed: ${Number(solarTotals.cumEdcConsumed).toLocaleString()} kWh`} />
-                          <div style={{ height: '46%' }} className="w-full bg-[#1f7a4c]" title={`M02 Exported: ${Number(solarTotals.cumExp).toLocaleString()} kWh`} />
+                        <div className="w-3/5 h-full flex flex-col">
+                          <div className="h-1/2 flex flex-col justify-end">
+                            <div style={{ height: '24%' }} className="w-full bg-[#687076]" title={`M01 Imported: ${Number(solarTotals.cumImp).toLocaleString()} kWh`} />
+                            <div style={{ height: '64%' }} className="w-full bg-[#e07a16]" title={`SunRun Produced: ${Number(solarTotals.cumSolarExact).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kWh (${solarTotals.cumSolarMwh} MWh)`} />
+                          </div>
+                          <div className="h-1/2 flex flex-col justify-start">
+                            <div style={{ height: '42%' }} className="w-full bg-[#b45309]" title={`EDC Consumed: ${Number(solarTotals.cumEdcConsumed).toLocaleString()} kWh`} />
+                            <div style={{ height: '46%' }} className="w-full bg-[#1f7a4c]" title={`M02 Exported: ${Number(solarTotals.cumExp).toLocaleString()} kWh`} />
+                          </div>
                         </div>
                       </div>
                     </div>
+                    <div className={`pl-10 text-center text-xs font-mono font-semibold pt-1.5 ${mutedText}`}>
+                      2026
+                    </div>
                   </div>
-                  <div className={`pl-10 text-center text-xs font-mono font-semibold pt-1 ${mutedText}`}>
-                    2026
+                </div>
+
+                {/* Bottom Lifetime Value Summary Strip (Aligns with Columns 1 & 2) */}
+                <div className={`p-5 border-t space-y-2 ${subPanelBg}`}>
+                  <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>
+                    LIFETIME VALUE SUMMARY
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className={mutedText}>Gross solar value</div>
+                      <div className="font-mono font-bold text-[#e07a16] mt-0.5">
+                        ${(Number(solarTotals.cumSolarExact) * 0.24).toFixed(2)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className={mutedText}>Official credit bank</div>
+                      <div className="font-mono font-bold text-[#1f7a4c] mt-0.5">
+                        {(moreBillsData?.current_credit_bank_kwh ?? 2210).toLocaleString()} kWh
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
