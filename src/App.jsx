@@ -210,6 +210,21 @@ function HeliosPulsePortalInner() {
   const [appRuntimeIssues, setAppRuntimeIssues] = useState([]);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
   const [dismissedAlertKeys, setDismissedAlertKeys] = useState([]);
+  const [canceledAlertKeys, setCanceledAlertKeys] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('heliospulse_canceled_alerts');
+      return Array.isArray(JSON.parse(saved || '[]')) ? JSON.parse(saved || '[]') : [];
+    } catch {
+      return [];
+    }
+  });
+  const [canceledBannerSig, setCanceledBannerSig] = useState(() => {
+    try {
+      return window.localStorage.getItem('heliospulse_canceled_banner_sig') || '';
+    } catch {
+      return '';
+    }
+  });
   const [bannerCleared, setBannerCleared] = useState(false);
   const [aiHoverOpen, setAiHoverOpen] = useState(false);
   const aiHoverCloseTimerRef = useRef(null);
@@ -811,8 +826,28 @@ function HeliosPulsePortalInner() {
       });
     }
 
-    return merged.filter((a) => !dismissedAlertKeys.includes(getAlertKey(a)));
-  }, [appRuntimeIssues, telemetryAlerts, solarRows, dismissedAlertKeys]);
+    return merged.filter((a) => {
+      const k = getAlertKey(a);
+      return !dismissedAlertKeys.includes(k) && !canceledAlertKeys.includes(k);
+    });
+  }, [appRuntimeIssues, telemetryAlerts, solarRows, dismissedAlertKeys, canceledAlertKeys]);
+
+  const persistCanceledAlertKeys = (nextKeys) => {
+    try {
+      window.localStorage.setItem('heliospulse_canceled_alerts', JSON.stringify(nextKeys));
+    } catch {
+      // Ignore storage errors in restricted contexts
+    }
+  };
+
+  const persistCanceledBannerSig = (sig) => {
+    setCanceledBannerSig(sig);
+    try {
+      window.localStorage.setItem('heliospulse_canceled_banner_sig', sig);
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   const handleClearAlertsBanner = () => {
     setDismissedAlertKeys((prev) => [
@@ -821,6 +856,33 @@ function HeliosPulsePortalInner() {
     setAppRuntimeIssues([]);
     setAlertsExpanded(false);
     setBannerCleared(true);
+  };
+
+  const handleCancelSingleAlert = (alert) => {
+    const key = getAlertKey(alert);
+    setCanceledAlertKeys((prev) => {
+      const next = [...new Set([...prev, key])];
+      persistCanceledAlertKeys(next);
+      return next;
+    });
+    if (alert.code === 'APP_RUNTIME_ISSUE') {
+      setAppRuntimeIssues((prev) => prev.filter((i) => i.id !== alert.id));
+    }
+    const sig = notificationStatus?.last_checked_at || notificationStatus?.recent_email_events?.[0]?.sent_at || 'closed';
+    persistCanceledBannerSig(sig);
+  };
+
+  const handleCancelAllAlerts = () => {
+    setCanceledAlertKeys((prev) => {
+      const next = [...new Set([...prev, ...combinedAlerts.map((a) => getAlertKey(a))])];
+      persistCanceledAlertKeys(next);
+      return next;
+    });
+    setAppRuntimeIssues([]);
+    setAlertsExpanded(false);
+    setBannerCleared(true);
+    const sig = notificationStatus?.last_checked_at || notificationStatus?.recent_email_events?.[0]?.sent_at || 'closed';
+    persistCanceledBannerSig(sig);
   };
 
   const triggerSyncPipeline = async () => {
@@ -2064,114 +2126,143 @@ function HeliosPulsePortalInner() {
           {/* MAIN CONTENT CONTAINER */}
           <main className="px-1 sm:px-2 pb-10 space-y-8">
             {/* IN-APP ANOMALIES, ISSUES & EMAIL NOTIFICATION STATUS BAR */}
-            {!bannerCleared && (combinedAlerts.length > 0 || (notificationStatus?.recent_email_events?.length || 0) > 0) && (
-              <div
-                className={`rounded-2xl border p-4 space-y-3 ${
-                  combinedAlerts.some((a) => a.severity === 'error')
-                    ? darkMode
-                      ? 'bg-rose-950/50 border-rose-500/60 text-rose-100'
-                      : 'bg-[#fef2f2] border-[#dc2626]/50 text-[#1a1917]'
-                    : combinedAlerts.length > 0
-                    ? darkMode
-                      ? 'bg-amber-950/40 border-amber-500/50 text-amber-100'
-                      : 'bg-[#fff7ed] border-[#e07a16]/50 text-[#1a1917]'
-                    : cardBg
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    {combinedAlerts.length > 0 ? (
-                      <AlertTriangle
-                        className={`w-4 h-4 shrink-0 ${
-                          combinedAlerts.some((a) => a.severity === 'error') ? 'text-[#b91c1c]' : 'text-[#e07a16]'
-                        }`}
-                      />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 shrink-0 text-[#1f7a4c]" />
-                    )}
-                    <span className="font-bold">
-                      {combinedAlerts.length > 0
-                        ? `${combinedAlerts.length} Data/App Anomaly & Issue Alert${combinedAlerts.length > 1 ? 's' : ''}`
-                        : 'All Telemetry & App Checks Healthy'}
-                    </span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${calloutBg}`}>
-                      <Mail className="w-3 h-3 text-[#1f7a4c]" />
-                      <span>Alerts &amp; New Records → dglanville@gmail.com</span>
-                    </span>
-                    {(notificationStatus?.new_sunrun_count > 0 || notificationStatus?.new_nyseg_count > 0) && (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#1f7a4c]/15 text-[#1f7a4c]">
-                        +{notificationStatus.new_sunrun_count} SunRun · +{notificationStatus.new_nyseg_count} NYSEG added
+            {(() => {
+              const currentNotifSig =
+                notificationStatus?.last_checked_at ||
+                notificationStatus?.recent_email_events?.[0]?.sent_at ||
+                '';
+              const showAlertsCard =
+                !bannerCleared &&
+                (combinedAlerts.length > 0 ||
+                  ((notificationStatus?.recent_email_events?.length || 0) > 0 &&
+                    canceledBannerSig !== currentNotifSig &&
+                    canceledAlertKeys.length === 0));
+              if (!showAlertsCard) return null;
+              return (
+                <div
+                  className={`rounded-2xl border p-4 space-y-3 ${
+                    combinedAlerts.some((a) => a.severity === 'error')
+                      ? darkMode
+                        ? 'bg-rose-950/50 border-rose-500/60 text-rose-100'
+                        : 'bg-[#fef2f2] border-[#dc2626]/50 text-[#1a1917]'
+                      : combinedAlerts.length > 0
+                      ? darkMode
+                        ? 'bg-amber-950/40 border-amber-500/50 text-amber-100'
+                        : 'bg-[#fff7ed] border-[#e07a16]/50 text-[#1a1917]'
+                      : cardBg
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {combinedAlerts.length > 0 ? (
+                        <AlertTriangle
+                          className={`w-4 h-4 shrink-0 ${
+                            combinedAlerts.some((a) => a.severity === 'error') ? 'text-[#b91c1c]' : 'text-[#e07a16]'
+                          }`}
+                        />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-[#1f7a4c]" />
+                      )}
+                      <span className="font-bold">
+                        {combinedAlerts.length > 0
+                          ? `${combinedAlerts.length} Data/App Anomaly & Issue Alert${combinedAlerts.length > 1 ? 's' : ''}`
+                          : 'All Telemetry & App Checks Healthy'}
                       </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setAlertsExpanded((v) => !v)}
-                      className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
-                    >
-                      {alertsExpanded ? 'Hide Details' : 'View Details'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleClearAlertsBanner}
-                      className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
-                      title="Clear displayed anomaly & issue alerts"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-
-                {/* Concise primary alert message always visible */}
-                {combinedAlerts.length > 0 && (
-                  <div className="space-y-1.5 text-xs">
-                    {(alertsExpanded ? combinedAlerts : combinedAlerts.slice(0, 2)).map((alert, idx) => (
-                      <div key={`${alert.code}-${idx}`} className="flex items-start justify-between gap-2 leading-relaxed">
-                        <div>
-                          <span
-                            className={`inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              alert.severity === 'error'
-                                ? 'bg-[#b91c1c] text-white'
-                                : 'bg-[#e07a16] text-white'
-                            }`}
-                          >
-                            {alert.severity === 'error' ? 'Issue' : 'Anomaly'}
-                          </span>
-                          <strong className="font-semibold">{alert.title}:</strong>{' '}
-                          <span className={mutedText}>{alert.message}</span>
-                        </div>
-                        {alert.code === 'APP_RUNTIME_ISSUE' && (
-                          <button
-                            onClick={() => setAppRuntimeIssues((prev) => prev.filter((i) => i.id !== alert.id))}
-                            className={`text-[11px] underline shrink-0 cursor-pointer ${mutedText}`}
-                          >
-                            Dismiss
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {alertsExpanded && notificationStatus?.recent_email_events?.length > 0 && (
-                  <div className={`pt-2 border-t text-[11px] space-y-1 ${dividerBorder}`}>
-                    <div className={`font-semibold uppercase tracking-wider text-[10px] ${mutedText}`}>
-                      Recent Email Notifications (dglanville@gmail.com)
-                    </div>
-                    {notificationStatus.recent_email_events.slice(0, 5).map((ev, idx) => (
-                      <div key={idx} className="flex flex-wrap items-center justify-between gap-2 font-mono">
-                        <span className="truncate">{ev.subject}</span>
-                        <span className={ev.status === 'sent' ? 'text-[#1f7a4c]' : 'text-[#b91c1c]'}>
-                          {ev.status === 'sent' ? `Sent ${ev.sent_at}` : `Error: ${ev.error}`}
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${calloutBg}`}>
+                        <Mail className="w-3 h-3 text-[#1f7a4c]" />
+                        <span>Alerts &amp; New Records → dglanville@gmail.com</span>
+                      </span>
+                      {(notificationStatus?.new_sunrun_count > 0 || notificationStatus?.new_nyseg_count > 0) && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#1f7a4c]/15 text-[#1f7a4c]">
+                          +{notificationStatus.new_sunrun_count} SunRun · +{notificationStatus.new_nyseg_count} NYSEG added
                         </span>
-                      </div>
-                    ))}
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setAlertsExpanded((v) => !v)}
+                        className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
+                      >
+                        {alertsExpanded ? 'Hide Details' : 'View Details'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearAlertsBanner}
+                        className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${pillBtnSecondary}`}
+                        title="Clear alerts for this session"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelAllAlerts}
+                        className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer transition ${
+                          darkMode
+                            ? 'bg-slate-900 border-rose-500/60 text-rose-300 hover:bg-rose-950/50'
+                            : 'bg-white border-[#dc2626]/50 text-[#b91c1c] hover:bg-[#fef2f2]'
+                        }`}
+                        title="Permanently close current alerts across reloads"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Concise primary alert message always visible */}
+                  {combinedAlerts.length > 0 && (
+                    <div className="space-y-1.5 text-xs">
+                      {(alertsExpanded ? combinedAlerts : combinedAlerts.slice(0, 2)).map((alert, idx) => (
+                        <div key={`${alert.code}-${idx}`} className="flex items-start justify-between gap-2 leading-relaxed">
+                          <div>
+                            <span
+                              className={`inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                alert.severity === 'error'
+                                  ? 'bg-[#b91c1c] text-white'
+                                  : 'bg-[#e07a16] text-white'
+                              }`}
+                            >
+                              {alert.severity === 'error' ? 'Issue' : 'Anomaly'}
+                            </span>
+                            <strong className="font-semibold">{alert.title}:</strong>{' '}
+                            <span className={mutedText}>{alert.message}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCancelSingleAlert(alert)}
+                            className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 cursor-pointer transition ${
+                              darkMode
+                                ? 'border-rose-500/50 text-rose-300 hover:bg-rose-950/60'
+                                : 'border-[#dc2626]/40 text-[#b91c1c] bg-white hover:bg-[#fef2f2]'
+                            }`}
+                            title="Permanently close this alert"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {alertsExpanded && notificationStatus?.recent_email_events?.length > 0 && (
+                    <div className={`pt-2 border-t text-[11px] space-y-1 ${dividerBorder}`}>
+                      <div className={`font-semibold uppercase tracking-wider text-[10px] ${mutedText}`}>
+                        Recent Email Notifications (dglanville@gmail.com)
+                      </div>
+                      {notificationStatus.recent_email_events.slice(0, 5).map((ev, idx) => (
+                        <div key={idx} className="flex flex-wrap items-center justify-between gap-2 font-mono">
+                          <span className="truncate">{ev.subject}</span>
+                          <span className={ev.status === 'sent' ? 'text-[#1f7a4c]' : 'text-[#b91c1c]'}>
+                            {ev.status === 'sent' ? `Sent ${ev.sent_at}` : `Error: ${ev.error}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
         {/* TAB 1: ENERGY DISTRIBUTION (UNIFIED SOLAR SAVINGS PALETTE & TYPOGRAPHY) */}
         {activeTab === 'distribution' && (
