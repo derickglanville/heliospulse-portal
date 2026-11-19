@@ -6,7 +6,7 @@ import {
   Database, Calculator, X,
   Check, Sparkles, Plug, FolderOpen, Upload,
   ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home, Minimize2,
-  Mail, Bell
+  Mail, Bell, Clock
 } from 'lucide-react';
 import telemetryData from './data/telemetryData.json';
 import solarHomeSideImg from './assets/solar-home-side.png';
@@ -207,6 +207,11 @@ function HeliosPulsePortalInner() {
   const [creditBankForecastBase, setCreditBankForecastBase] = useState(telemetryData.credit_bank_forecast);
   const [telemetryAlerts, setTelemetryAlerts] = useState(telemetryData.alerts || []);
   const [notificationStatus, setNotificationStatus] = useState(telemetryData.notification_status || null);
+  const [taskSchedulerData, setTaskSchedulerData] = useState(telemetryData.task_scheduler || null);
+  const [runningTaskTarget, setRunningTaskTarget] = useState(null); // null | 'sunrun' | 'nyseg' | 'both'
+  const [taskStatusLoading, setTaskStatusLoading] = useState(false);
+  const [taskRunBanner, setTaskRunBanner] = useState(null);
+  const taskPollTimerRef = useRef(null);
   const [appRuntimeIssues, setAppRuntimeIssues] = useState([]);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
   const [dismissedAlertKeys, setDismissedAlertKeys] = useState([]);
@@ -794,6 +799,9 @@ function HeliosPulsePortalInner() {
         setBannerCleared(false);
       }
     }
+    if (fresh.task_scheduler) {
+      setTaskSchedulerData(fresh.task_scheduler);
+    }
     if (fresh.credit_bank_forecast) {
       setCreditBankForecastBase(fresh.credit_bank_forecast);
     }
@@ -804,6 +812,136 @@ function HeliosPulsePortalInner() {
       );
     }
   };
+
+  const stopTaskPolling = () => {
+    if (taskPollTimerRef.current) {
+      clearInterval(taskPollTimerRef.current);
+      taskPollTimerRef.current = null;
+    }
+  };
+
+  const mergeTaskSchedulerPayload = (incoming) => {
+    if (!incoming || !Array.isArray(incoming.jobs)) return;
+    setTaskSchedulerData((prev) => {
+      const prevByKey = new Map((prev?.jobs || []).map((j) => [j.key, j]));
+      const mergedJobs = incoming.jobs.map((job) => {
+        const oldJob = prevByKey.get(job.key);
+        if (job.state === 'Unavailable' && oldJob && oldJob.state && oldJob.state !== 'Unavailable') {
+          return { ...oldJob, logInfo: job.logInfo || oldJob.logInfo || null, liveQueryNote: job.queryError || null };
+        }
+        return job;
+      });
+      return { ...incoming, jobs: mergedJobs };
+    });
+  };
+
+  const refreshTaskSchedulerStatus = async (silent = false) => {
+    if (!silent) setTaskStatusLoading(true);
+    try {
+      const resp = await fetch('/heliospulse-portal/api/task-scheduler');
+      if (resp.ok) {
+        const payload = await resp.json();
+        mergeTaskSchedulerPayload(payload);
+        return payload;
+      }
+    } catch {
+      // Static GitHub Pages builds rely on the snapshot saved in telemetryData.json
+    } finally {
+      if (!silent) setTaskStatusLoading(false);
+    }
+    return null;
+  };
+
+  const handleRunScheduledTask = async (target = 'both') => {
+    if (runningTaskTarget) return;
+    stopTaskPolling();
+    setRunningTaskTarget(target);
+    const labelMap = {
+      sunrun: 'Sunrun Daily Download and Copy',
+      nyseg: 'Solar Energy Tracker - NYSEG Daily Sync',
+      both: 'SunRun + NYSEG scheduled jobs',
+    };
+    const psFallbackCmd =
+      target === 'sunrun'
+        ? 'Start-ScheduledTask -TaskName "Sunrun Daily Download and Copy"'
+        : target === 'nyseg'
+        ? 'Start-ScheduledTask -TaskName "Solar Energy Tracker - NYSEG Daily Sync"'
+        : 'Start-ScheduledTask -TaskName "Sunrun Daily Download and Copy"; Start-ScheduledTask -TaskName "Solar Energy Tracker - NYSEG Daily Sync"';
+
+    setTaskRunBanner({
+      tone: 'info',
+      title: `Starting ${labelMap[target] || target}...`,
+      detail: 'Sending Windows Task Scheduler trigger to the local Vite runner.',
+    });
+
+    try {
+      const resp = await fetch('/heliospulse-portal/api/run-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target }),
+      });
+
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('LOCAL_API_UNAVAILABLE');
+      }
+
+      const data = await resp.json();
+      mergeTaskSchedulerPayload(data);
+
+      if (!resp.ok || data.ok === false) {
+        const errMsg = (data.errors && data.errors.join(' | ')) || data.error || `HTTP ${resp.status}`;
+        setTaskRunBanner({
+          tone: 'error',
+          title: `Could not trigger ${labelMap[target]}`,
+          detail: `${errMsg} — Fallback PowerShell: ${psFallbackCmd}`,
+        });
+        setRunningTaskTarget(null);
+        return;
+      }
+
+      setTaskRunBanner({
+        tone: 'success',
+        title: `Triggered ${labelMap[target]}`,
+        detail: 'Windows Task Scheduler accepted the run request. Polling task status and syncing CSV files when finished...',
+      });
+
+      let attempts = 0;
+      let sawRunning = (data.jobs || []).some((j) => j.state === 'Running');
+      taskPollTimerRef.current = setInterval(async () => {
+        attempts += 1;
+        const latest = await refreshTaskSchedulerStatus(true);
+        const stillRunning = (latest?.jobs || []).some((j) => j.state === 'Running');
+        if (stillRunning) sawRunning = true;
+
+        if ((!stillRunning && sawRunning) || (!stillRunning && attempts >= 3) || attempts >= 24) {
+          stopTaskPolling();
+          setRunningTaskTarget(null);
+          await triggerSyncPipeline();
+          setTaskRunBanner({
+            tone: 'success',
+            title: `${labelMap[target]} finished — CSV data synced`,
+            detail: `Checked at ${latest?.checkedAt || new Date().toLocaleTimeString()}. Latest Task Scheduler status and CSV telemetry refreshed.`,
+          });
+        }
+      }, 3000);
+    } catch {
+      setRunningTaskTarget(null);
+      setTaskRunBanner({
+        tone: 'warning',
+        title: 'Local runner API unavailable in static preview',
+        detail: `Run in local Vite dev mode (npm run dev) for one-click execution, or execute in PowerShell: ${psFallbackCmd}`,
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'connectors') {
+      refreshTaskSchedulerStatus(true);
+    }
+  }, [activeTab]);
+
+  useEffect(() => () => stopTaskPolling(), []);
 
   const allDetectedAlerts = useMemo(() => {
     const merged = [...appRuntimeIssues, ...(telemetryAlerts || [])];
@@ -3832,13 +3970,207 @@ function HeliosPulsePortalInner() {
         {/* TAB 8: CSV CONNECTORS */}
         {activeTab === 'connectors' && (
           <div className="space-y-6">
-            <div className="space-y-2.5 max-w-2xl">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                Local CSV connectors & ingestion pipeline
-              </h1>
-              <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
-                Telemetry is synced from your local Sunrun daily and NYSEG hourly CSV files, validated for physical bounds, and stripped of PII before static deployment.
-              </p>
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+              <div className="space-y-2.5 max-w-2xl">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                  Local CSV connectors & ingestion pipeline
+                </h1>
+                <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
+                  Telemetry is synced from your local Sunrun daily and NYSEG hourly CSV files, validated for physical bounds, and stripped of PII before static deployment.
+                </p>
+              </div>
+
+              <div className={`flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2.5 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-[#dcd8ce]'}`}>
+                <button
+                  type="button"
+                  onClick={() => refreshTaskSchedulerStatus(false)}
+                  disabled={taskStatusLoading}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition ${
+                    darkMode
+                      ? 'border-slate-700 hover:bg-slate-800 text-slate-200'
+                      : 'border-[#dcd8ce] hover:bg-[#faf8f4] text-[#1a1917]'
+                  } disabled:opacity-50`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${taskStatusLoading ? 'animate-spin' : ''}`} />
+                  Refresh Jobs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRunScheduledTask('sunrun')}
+                  disabled={Boolean(runningTaskTarget)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#e07a16] hover:bg-[#c86a10] text-white text-xs font-semibold transition disabled:opacity-50"
+                >
+                  <Play className="w-3 h-3" />
+                  {runningTaskTarget === 'sunrun' ? 'Running SunRun...' : 'Run SunRun'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRunScheduledTask('nyseg')}
+                  disabled={Boolean(runningTaskTarget)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1f7a4c] hover:bg-[#17613b] text-white text-xs font-semibold transition disabled:opacity-50"
+                >
+                  <Play className="w-3 h-3" />
+                  {runningTaskTarget === 'nyseg' ? 'Running NYSEG...' : 'Run NYSEG'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRunScheduledTask('both')}
+                  disabled={Boolean(runningTaskTarget)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#1a1917] hover:bg-[#2c2a27] text-white text-xs font-semibold transition disabled:opacity-50"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  {runningTaskTarget === 'both' ? 'Running Both Jobs...' : 'Run Both Jobs'}
+                </button>
+              </div>
+            </div>
+
+            {taskRunBanner && (
+              <div
+                className={`rounded-2xl border px-4 py-3 text-xs flex items-start justify-between gap-3 ${
+                  taskRunBanner.tone === 'error'
+                    ? darkMode
+                      ? 'bg-red-950/40 border-red-800/70 text-red-200'
+                      : 'bg-[#fef2f2] border-[#fecaca] text-[#991b1b]'
+                    : taskRunBanner.tone === 'warning'
+                    ? darkMode
+                      ? 'bg-amber-950/40 border-amber-800/70 text-amber-200'
+                      : 'bg-[#fff7ed] border-[#fed7aa] text-[#9a3412]'
+                    : taskRunBanner.tone === 'success'
+                    ? darkMode
+                      ? 'bg-emerald-950/40 border-emerald-800/70 text-emerald-200'
+                      : 'bg-[#ecfdf5] border-[#a7f3d0] text-[#065f46]'
+                    : darkMode
+                    ? 'bg-slate-900 border-slate-700 text-slate-200'
+                    : 'bg-[#faf8f4] border-[#dcd8ce] text-[#1a1917]'
+                }`}
+              >
+                <div className="space-y-0.5">
+                  <div className="font-semibold">{taskRunBanner.title}</div>
+                  <div className="font-mono text-[11px] opacity-90 break-all">{taskRunBanner.detail}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTaskRunBanner(null)}
+                  className="p-1 rounded-md hover:bg-black/5 shrink-0"
+                  aria-label="Dismiss task status banner"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Windows Task Scheduler Job Info */}
+            <div className={`rounded-2xl border p-6 space-y-4 ${cardBg}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#e07a16]" />
+                  <h3 className="font-semibold text-sm">Windows Task Scheduler Jobs</h3>
+                </div>
+                <span className={`text-[11px] font-mono ${mutedText}`}>
+                  {taskSchedulerData?.checkedAt
+                    ? `Last queried ${taskSchedulerData.checkedAt}`
+                    : 'Snapshot from telemetryData.json'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(taskSchedulerData?.jobs || []).map((job) => {
+                  const isRunning = job.state === 'Running';
+                  const isUnavailable = job.state === 'Unavailable' || (!job.lastRunTime && job.lastTaskResult === null);
+                  const exitOk = job.lastTaskResult === 0;
+                  const statePillClass = isRunning
+                    ? 'bg-[#e07a16]/15 text-[#b45309]'
+                    : isUnavailable
+                    ? darkMode
+                      ? 'bg-slate-800 text-slate-300'
+                      : 'bg-[#efece4] text-[#6b675e]'
+                    : exitOk
+                    ? 'bg-[#1f7a4c]/12 text-[#1f7a4c]'
+                    : 'bg-[#b91c1c]/12 text-[#b91c1c]';
+
+                  return (
+                    <div
+                      key={job.key}
+                      className={`rounded-xl border p-4 space-y-3 ${
+                        darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#e6e2d8]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold">{job.label}</div>
+                          <div className={`text-[11px] font-mono truncate ${mutedText}`} title={job.taskName}>
+                            {job.taskName}
+                          </div>
+                        </div>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0 ${statePillClass}`}>
+                          {job.state || 'Unknown'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className={`rounded-lg p-2 ${darkMode ? 'bg-slate-900' : 'bg-white border border-[#ece8de]'}`}>
+                          <div className={mutedText}>Schedule</div>
+                          <div className="font-semibold mt-0.5">{job.schedule}</div>
+                        </div>
+                        <div className={`rounded-lg p-2 ${darkMode ? 'bg-slate-900' : 'bg-white border border-[#ece8de]'}`}>
+                          <div className={mutedText}>Last Task Result</div>
+                          <div
+                            className={`font-mono font-semibold mt-0.5 ${
+                              job.lastTaskResult === null || job.lastTaskResult === undefined
+                                ? ''
+                                : exitOk
+                                ? 'text-[#1f7a4c]'
+                                : 'text-[#b91c1c]'
+                            }`}
+                          >
+                            {job.lastTaskResult === null || job.lastTaskResult === undefined
+                              ? '—'
+                              : `${job.lastTaskResult} (${exitOk ? 'Succeeded' : 'Error'})`}
+                          </div>
+                        </div>
+                        <div className={`rounded-lg p-2 ${darkMode ? 'bg-slate-900' : 'bg-white border border-[#ece8de]'}`}>
+                          <div className={mutedText}>Last Run Time</div>
+                          <div className="font-mono font-medium mt-0.5">{job.lastRunTime || '—'}</div>
+                        </div>
+                        <div className={`rounded-lg p-2 ${darkMode ? 'bg-slate-900' : 'bg-white border border-[#ece8de]'}`}>
+                          <div className={mutedText}>Next Run Time</div>
+                          <div className="font-mono font-medium mt-0.5">{job.nextRunTime || '—'}</div>
+                        </div>
+                      </div>
+
+                      {job.logInfo && (
+                        <div className={`rounded-lg px-2.5 py-2 text-[11px] font-mono border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-[#ece8de]'}`}>
+                          <div className="flex items-center justify-between gap-2 text-[10px] opacity-75">
+                            <span className="truncate">{job.logInfo.logFile}</span>
+                            <span className="shrink-0">{job.logInfo.updatedAt}</span>
+                          </div>
+                          <div className="mt-0.5 leading-snug break-words">{job.logInfo.summary}</div>
+                        </div>
+                      )}
+
+                      {job.command && (
+                        <div className={`text-[10px] font-mono truncate ${mutedText}`} title={job.command}>
+                          Action: {job.command}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleRunScheduledTask(job.key)}
+                          disabled={Boolean(runningTaskTarget) || isRunning}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold text-white transition disabled:opacity-50 ${
+                            job.key === 'sunrun' ? 'bg-[#e07a16] hover:bg-[#c86a10]' : 'bg-[#1f7a4c] hover:bg-[#17613b]'
+                          }`}
+                        >
+                          <Play className="w-3 h-3" />
+                          {runningTaskTarget === job.key || isRunning ? 'Running...' : `Run ${job.key === 'sunrun' ? 'SunRun' : 'NYSEG'} Job`}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -512,6 +512,38 @@ if (fs.existsSync(notifyEmailScript)) {
   }
 }
 
+const taskSchedulerScript = path.join(__dirname, 'task-scheduler.ps1');
+let taskSchedulerSnapshot = previousPayload?.task_scheduler || null;
+if (fs.existsSync(taskSchedulerScript)) {
+  try {
+    const psOut = execFileSync(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', taskSchedulerScript, '-Action', 'status'],
+      { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 }
+    );
+    const parsedTaskStatus = JSON.parse(psOut.trim());
+    if (Array.isArray(parsedTaskStatus?.jobs)) {
+      const prevByKey = new Map(
+        (previousPayload?.task_scheduler?.jobs || []).map((job) => [job.key, job])
+      );
+      parsedTaskStatus.jobs = parsedTaskStatus.jobs.map((job) => {
+        const prev = prevByKey.get(job.key);
+        if (job.state === 'Unavailable' && prev && prev.state && prev.state !== 'Unavailable') {
+          return {
+            ...prev,
+            logInfo: job.logInfo || prev.logInfo || null,
+            liveQueryNote: job.queryError || null,
+          };
+        }
+        return job;
+      });
+      taskSchedulerSnapshot = parsedTaskStatus;
+    }
+  } catch (err) {
+    console.warn('[sync-csv-data] Warning: Task Scheduler snapshot step failed:', err.message);
+  }
+}
+
 const payload = {
   metadata: {
     generated_at: new Date().toISOString(),
@@ -536,6 +568,7 @@ const payload = {
     reconciled_edc_consumed_kwh: totalEdcConsumedKwh,
     cumulative_net_credit_bank_kwh: netCreditBankKwh,
   },
+  task_scheduler: taskSchedulerSnapshot,
   alerts: detectedAnomalies,
   notification_status: {
     ...emailNotificationSummary,

@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-19T13:43:03.316Z",
+    "generated_at": "2026-11-19T13:56:57.819Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -21,6 +21,48 @@
     "cumulative_m02_export_kwh": 3402.843,
     "reconciled_edc_consumed_kwh": 3249.069,
     "cumulative_net_credit_bank_kwh": 1511.185
+  },
+  "task_scheduler": {
+    "checkedAt": "2026-11-19 08:56:57",
+    "action": "status",
+    "target": "both",
+    "runResults": [],
+    "jobs": [
+      {
+        "key": "sunrun",
+        "label": "SunRun Production Download",
+        "taskName": "Sunrun Daily Download and Copy",
+        "schedule": "Daily at 7:29 AM",
+        "state": "Unavailable",
+        "lastRunTime": null,
+        "lastTaskResult": null,
+        "nextRunTime": null,
+        "command": "",
+        "queryError": "Exception calling \"ProcessRecord\" with \"1\" argument(s): \"Access to a CIM resource was not available to the client.\"",
+        "logInfo": {
+          "logFile": "sunrun_workflow_2026-11-19.log",
+          "updatedAt": "2026-11-19 08:15:41",
+          "summary": "[2026-11-19 08:15:41] Email report sent successfully."
+        }
+      },
+      {
+        "key": "nyseg",
+        "label": "NYSEG Interval Usage Sync",
+        "taskName": "Solar Energy Tracker - NYSEG Daily Sync",
+        "schedule": "Daily at 7:30 AM",
+        "state": "Unavailable",
+        "lastRunTime": null,
+        "lastTaskResult": null,
+        "nextRunTime": null,
+        "command": "",
+        "queryError": "Exception calling \"ProcessRecord\" with \"1\" argument(s): \"Access to a CIM resource was not available to the client.\"",
+        "logInfo": {
+          "logFile": "nyseg-daily-sync.log",
+          "updatedAt": "2026-11-19 08:29:04",
+          "summary": "Step 3/3 complete: 0 Firebase records saved; 109 legacy portal meter records refreshed; history and email housekeeping finished."
+        }
+      }
+    ]
   },
   "alerts": [
     {
@@ -50,7 +92,7 @@
     "recipient": "dglanville@gmail.com",
     "should_send": false,
     "unsent_anomaly_count": 1,
-    "new_sunrun_count": 2,
+    "new_sunrun_count": 0,
     "new_nyseg_count": 0,
     "new_bills_count": 0,
     "emails_dispatched": [],
@@ -77,11 +119,8 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-19T13:43:03.320Z",
-    "new_sunrun_dates": [
-      "2026-11-16",
-      "2026-11-17"
-    ],
+    "last_checked_at": "2026-11-19T13:56:57.825Z",
+    "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []
   },
