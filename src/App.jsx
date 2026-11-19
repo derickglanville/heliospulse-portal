@@ -196,7 +196,7 @@ class AppErrorBoundary extends React.Component {
 
 function HeliosPulsePortalInner() {
   const [darkMode, setDarkMode] = useState(false);
-  const [activeTab, setActiveTab] = useState('savings');
+  const [activeTab, setActiveTab] = useState('datagrid');
   const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
