@@ -24,119 +24,129 @@ function reportServerIssueEmail(title, message, source = 'vite.config.js', detai
 }
 
 function liveCsvAndBillsSyncPlugin() {
+  const runSyncAndGetJson = () => {
+    execFileSync('node', ['scripts/sync-csv-data.mjs'], {
+      stdio: 'inherit',
+      env: { ...process.env, NOTIFY_EMAIL: '1' },
+    });
+    const dataPath = path.resolve('src/data/telemetryData.json');
+    return fs.readFileSync(dataPath, 'utf8');
+  };
+
+  const runTaskSchedulerPs = (action = 'status', target = 'both') => {
+    const safeAction = action === 'run' ? 'run' : 'status';
+    const safeTarget = ['sunrun', 'nyseg', 'both'].includes(target) ? target : 'both';
+    const psOut = execFileSync(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        path.resolve('scripts/task-scheduler.ps1'),
+        '-Action',
+        safeAction,
+        '-Target',
+        safeTarget,
+      ],
+      { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 }
+    );
+    return JSON.parse(psOut.trim() || '{}');
+  };
+
+  const sendJson = (res, statusCode, data) => {
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(typeof data === 'string' ? data : JSON.stringify(data));
+  };
+
+  const attachApiMiddlewares = (middlewares) => {
+    middlewares.use('/heliospulse-portal/api', (req, res, next) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      if (req.method === 'OPTIONS') {
+        res.statusCode = 204;
+        res.end();
+        return;
+      }
+      next();
+    });
+
+    middlewares.use('/heliospulse-portal/api/sync-csv', (req, res) => {
+      try {
+        const json = runSyncAndGetJson();
+        sendJson(res, 200, json);
+      } catch (err) {
+        reportServerIssueEmail('Sync CSV Pipeline Failed', err.message, 'vite/api/sync-csv', err.stack || '');
+        sendJson(res, 500, { error: err.message });
+      }
+    });
+
+    middlewares.use('/heliospulse-portal/api/task-scheduler', (req, res) => {
+      try {
+        const data = runTaskSchedulerPs('status', 'both');
+        sendJson(res, 200, { ok: true, ...data });
+      } catch (err) {
+        sendJson(res, 500, { ok: false, error: err.message });
+      }
+    });
+
+    middlewares.use('/heliospulse-portal/api/run-task', (req, res) => {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { ok: false, error: 'Method Not Allowed' });
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body || '{}');
+          const target = ['sunrun', 'nyseg', 'both'].includes(parsed.target) ? parsed.target : 'both';
+          const data = runTaskSchedulerPs('run', target);
+          const runErrors = (data.runResults || []).filter((r) => r.error).map((r) => `${r.taskName}: ${r.error}`);
+          sendJson(res, 200, { ok: runErrors.length === 0, errors: runErrors, ...data });
+        } catch (err) {
+          sendJson(res, 500, { ok: false, error: err.message });
+        }
+      });
+    });
+
+    middlewares.use('/heliospulse-portal/api/report-issue', (req, res) => {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'Method Not Allowed' });
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body || '{}');
+          const result = reportServerIssueEmail(
+            parsed.title || 'App Runtime Issue',
+            parsed.message || 'Unspecified issue',
+            parsed.source || 'HeliosPulse Client',
+            parsed.details || ''
+          );
+          sendJson(res, 200, result);
+        } catch (err) {
+          sendJson(res, 500, { status: 'error', error: err.message });
+        }
+      });
+    });
+  };
+
   return {
     name: 'live-csv-and-bills-sync',
+    configurePreviewServer(server) {
+      attachApiMiddlewares(server.middlewares);
+    },
     configureServer(server) {
-      const runSyncAndGetJson = () => {
-        execFileSync('node', ['scripts/sync-csv-data.mjs'], {
-          stdio: 'inherit',
-          env: { ...process.env, NOTIFY_EMAIL: '1' },
-        });
-        const dataPath = path.resolve('src/data/telemetryData.json');
-        return fs.readFileSync(dataPath, 'utf8');
-      };
-
-      server.middlewares.use('/heliospulse-portal/api/sync-csv', (req, res) => {
-        try {
-          const json = runSyncAndGetJson();
-          res.setHeader('Content-Type', 'application/json');
-          res.end(json);
-        } catch (err) {
-          reportServerIssueEmail('Sync CSV Pipeline Failed', err.message, 'vite/api/sync-csv', err.stack || '');
-          res.statusCode = 500;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: err.message }));
-        }
-      });
-
-      const runTaskSchedulerPs = (action = 'status', target = 'both') => {
-        const safeAction = action === 'run' ? 'run' : 'status';
-        const safeTarget = ['sunrun', 'nyseg', 'both'].includes(target) ? target : 'both';
-        const psOut = execFileSync(
-          'powershell',
-          [
-            '-NoProfile',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            path.resolve('scripts/task-scheduler.ps1'),
-            '-Action',
-            safeAction,
-            '-Target',
-            safeTarget,
-          ],
-          { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 }
-        );
-        return JSON.parse(psOut.trim() || '{}');
-      };
-
-      server.middlewares.use('/heliospulse-portal/api/task-scheduler', (req, res) => {
-        try {
-          const data = runTaskSchedulerPs('status', 'both');
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ ok: true, ...data }));
-        } catch (err) {
-          res.statusCode = 500;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ ok: false, error: err.message }));
-        }
-      });
-
-      server.middlewares.use('/heliospulse-portal/api/run-task', (req, res) => {
-        if (req.method !== 'POST') {
-          res.statusCode = 405;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ ok: false, error: 'Method Not Allowed' }));
-          return;
-        }
-        let body = '';
-        req.on('data', (chunk) => {
-          body += chunk;
-        });
-        req.on('end', () => {
-          try {
-            const parsed = JSON.parse(body || '{}');
-            const target = ['sunrun', 'nyseg', 'both'].includes(parsed.target) ? parsed.target : 'both';
-            const data = runTaskSchedulerPs('run', target);
-            const runErrors = (data.runResults || []).filter((r) => r.error).map((r) => `${r.taskName}: ${r.error}`);
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: runErrors.length === 0, errors: runErrors, ...data }));
-          } catch (err) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: false, error: err.message }));
-          }
-        });
-      });
-
-      server.middlewares.use('/heliospulse-portal/api/report-issue', (req, res) => {
-        if (req.method !== 'POST') {
-          res.statusCode = 405;
-          res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-          return;
-        }
-        let body = '';
-        req.on('data', (chunk) => {
-          body += chunk;
-        });
-        req.on('end', () => {
-          try {
-            const parsed = JSON.parse(body || '{}');
-            const result = reportServerIssueEmail(
-              parsed.title || 'App Runtime Issue',
-              parsed.message || 'Unspecified issue',
-              parsed.source || 'HeliosPulse Client',
-              parsed.details || ''
-            );
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(result));
-          } catch (err) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ status: 'error', error: err.message }));
-          }
-        });
-      });
+      attachApiMiddlewares(server.middlewares);
 
       const watchFolder = (dirPath, matchFn, eventName, label) => {
         if (!fs.existsSync(dirPath)) return;

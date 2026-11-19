@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-19T14:27:51.707Z",
+    "generated_at": "2026-11-19T15:25:55.490Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -23,7 +23,7 @@
     "cumulative_net_credit_bank_kwh": 1511.185
   },
   "task_scheduler": {
-    "checkedAt": "2026-11-19 09:27:51",
+    "checkedAt": "2026-11-19 10:25:55",
     "action": "status",
     "target": "both",
     "runResults": [],
@@ -42,7 +42,29 @@
         "logInfo": {
           "logFile": "sunrun_workflow_2026-11-19.log",
           "updatedAt": "2026-11-19 08:15:41",
-          "summary": "[2026-11-19 08:15:41] Email report sent successfully."
+          "summary": "[2026-11-19 08:15:41] Email report sent successfully.",
+          "recentSteps": [
+            "[2026-11-19 08:11:25] Starting: sunrun_download_v7.py",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:11:45] Launching Chromium.",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:12:07] Checking the saved Sunrun session.",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:12:11] Saved session is valid.",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:12:11] Opening the Sunrun home page.",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:12:13] Opening the History page (visit 1/2).",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:13:55] History controls have not rendered yet; reloading the History page once.",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:13:55] Opening the History page (visit 2/2).",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py: [08:15:38] Browser closed.",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py ERROR:",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py ERROR: Sunrun download failed during: download",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py ERROR: Reason: The History page opened, but its production controls were not found after a reload.",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py ERROR:",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py ERROR: Screenshot: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\diagnostics\\20261119_081536_download.png",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py ERROR: HTML snapshot: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\diagnostics\\20261119_081536_download.html",
+            "[2026-11-19 08:15:39] sunrun_download_v7.py ERROR: Current page: https://my.sunrun.com/login",
+            "[2026-11-19 08:15:39] WORKFLOW FAILED: sunrun_download_v7.py failed with exit code 1.",
+            "[2026-11-19 08:15:39] HTML report saved: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\Report\\Sunrun_Report_2026-11-19_081539.html",
+            "[2026-11-19 08:15:41] Email report sent successfully.",
+            "[2026-11-19 08:15:41] Daily load history updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Daily_Load_History.json"
+          ]
         }
       },
       {
@@ -59,7 +81,17 @@
         "logInfo": {
           "logFile": "nyseg-daily-sync.log",
           "updatedAt": "2026-11-19 08:29:04",
-          "summary": "Step 3/3 complete: 0 Firebase records saved; 109 legacy portal meter records refreshed; history and email housekeeping finished."
+          "summary": "Step 3/3 complete: 0 Firebase records saved; 109 legacy portal meter records refreshed; history and email housekeeping finished.",
+          "recentSteps": [
+            "[2026-11-19T08:28:51-05:00] Processing the CSV from the last successful NYSEG Manual Run",
+            "Step 2/2: Validating M01/M02, updating Firebase and dashboards, recording history, sending email, and completing housekeeping.",
+            "Step 1/2: Using the already downloaded NYSEG CSV…",
+            "Step 2/3: Validating and saving new NYSEG M01/M02 readings to Firebase…",
+            "Step 2/3 complete: 0 new Firebase records added; all NYSEG dates through 2026-11-16 are already recorded.",
+            "Step 3/3: Updating the legacy Sunrun Energy Portal meter history…",
+            "Legacy portal history complete: 109 daily M01/M02 records updated from 2026-07-31 through 2026-11-16.",
+            "Step 3/3 complete: 0 Firebase records saved; 109 legacy portal meter records refreshed; history and email housekeeping finished."
+          ]
         }
       }
     ]
@@ -119,7 +151,7 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-19T14:27:51.710Z",
+    "last_checked_at": "2026-11-19T15:25:55.494Z",
     "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []

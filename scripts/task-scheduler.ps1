@@ -56,24 +56,42 @@ function Get-LatestLogSummary($def) {
                 Sort-Object LastWriteTime -Descending |
                 Select-Object -First 1
             if ($latest) {
-                $lines = Get-Content $latest.FullName -Tail 30
-                $reason = $lines | Where-Object { $_ -match "Reason:|WORKFLOW FAILED:|Complete|Downloaded|Email report sent" } | Select-Object -Last 1
-                if (-not $reason) { $reason = $lines | Where-Object { $_.Trim() } | Select-Object -Last 1 }
+                $lines = @(Get-Content $latest.FullName -Encoding UTF8 -Tail 80)
+                $startIdx = 0
+                for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+                    if ($lines[$i] -match "Validating folders, scripts|Starting workflow") {
+                        $startIdx = $i
+                        break
+                    }
+                }
+                $runLines = @($lines[$startIdx..($lines.Count - 1)] | Where-Object { $_.Trim() -ne "" } | ForEach-Object { $_.Trim() })
+                $reason = $runLines | Where-Object { $_ -match "Reason:|WORKFLOW FAILED:|Complete|Downloaded|Email report sent|Copied" } | Select-Object -Last 1
+                if (-not $reason) { $reason = $runLines | Select-Object -Last 1 }
                 return [PSCustomObject]@{
                     logFile = $latest.Name
                     updatedAt = $latest.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
                     summary = "$reason".Trim()
+                    recentSteps = @($runLines | Select-Object -Last 20)
                 }
             }
         } elseif ($def.logFile -and (Test-Path $def.logFile)) {
             $item = Get-Item $def.logFile
-            $lines = Get-Content $item.FullName -Tail 20
-            $reason = $lines | Where-Object { $_ -match "complete|ERROR|saved|updated" } | Select-Object -Last 1
-            if (-not $reason) { $reason = $lines | Where-Object { $_.Trim() } | Select-Object -Last 1 }
+            $lines = @(Get-Content $item.FullName -Encoding UTF8 -Tail 60)
+            $startIdx = 0
+            for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+                if ($lines[$i] -match "^\[20\d\d-\d\d-\d\d") {
+                    $startIdx = $i
+                    break
+                }
+            }
+            $runLines = @($lines[$startIdx..($lines.Count - 1)] | Where-Object { $_.Trim() -ne "" } | ForEach-Object { $_.Trim() })
+            $reason = $runLines | Where-Object { $_ -match "complete|ERROR|saved|updated" } | Select-Object -Last 1
+            if (-not $reason) { $reason = $runLines | Select-Object -Last 1 }
             return [PSCustomObject]@{
                 logFile = $item.Name
                 updatedAt = $item.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
                 summary = "$reason".Trim()
+                recentSteps = @($runLines | Select-Object -Last 20)
             }
         }
     } catch {}

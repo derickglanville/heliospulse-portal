@@ -219,6 +219,16 @@ function HeliosPulsePortalInner() {
   const [runningTaskTarget, setRunningTaskTarget] = useState(null); // null | 'sunrun' | 'nyseg' | 'both'
   const [taskStatusLoading, setTaskStatusLoading] = useState(false);
   const [taskRunBanner, setTaskRunBanner] = useState(null);
+  const [taskExecutionSteps, setTaskExecutionSteps] = useState([]);
+  const [runnerBaseUrl, setRunnerBaseUrl] = useState(() => {
+    try {
+      return window.localStorage.getItem('heliospulse_runner_url') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [connectedRunnerOrigin, setConnectedRunnerOrigin] = useState(null);
+  const [showRunnerSettings, setShowRunnerSettings] = useState(false);
   const taskPollTimerRef = useRef(null);
   const [appRuntimeIssues, setAppRuntimeIssues] = useState([]);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
@@ -873,17 +883,54 @@ function HeliosPulsePortalInner() {
     });
   };
 
+  const getRunnerBases = () => {
+    const bases = [''];
+    const custom = (runnerBaseUrl || '').trim().replace(/\/+$/, '');
+    if (custom && !bases.includes(custom)) bases.push(custom);
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1' || origin.includes('github.io')) {
+        for (const candidate of ['http://127.0.0.1:5173', 'http://localhost:5173', 'http://127.0.0.1:4173', 'http://localhost:4173']) {
+          if (candidate !== origin && !bases.includes(candidate)) {
+            bases.push(candidate);
+          }
+        }
+      }
+    }
+    return bases;
+  };
+
+  const fetchLocalRunnerApi = async (apiPath, options) => {
+    let lastError = null;
+    for (const base of getRunnerBases()) {
+      try {
+        const resp = await fetch(`${base}${apiPath}`, options);
+        const contentType = resp.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          continue;
+        }
+        setConnectedRunnerOrigin(base || (typeof window !== 'undefined' ? window.location.origin : 'same-origin'));
+        return resp;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    setConnectedRunnerOrigin(null);
+    throw lastError || new Error('LOCAL_API_UNAVAILABLE');
+  };
+
   const refreshTaskSchedulerStatus = async (silent = false) => {
     if (!silent) setTaskStatusLoading(true);
     try {
-      const resp = await fetch('/heliospulse-portal/api/task-scheduler');
+      const resp = await fetchLocalRunnerApi('/heliospulse-portal/api/task-scheduler');
       if (resp.ok) {
         const payload = await resp.json();
         mergeTaskSchedulerPayload(payload);
         return payload;
       }
     } catch {
-      // Static GitHub Pages builds rely on the snapshot saved in telemetryData.json
+      // Static GitHub Pages builds rely on telemetryData.json unless connected to a local/LAN Vite runner
     } finally {
       if (!silent) setTaskStatusLoading(false);
     }
@@ -906,6 +953,38 @@ function HeliosPulsePortalInner() {
         ? 'Start-ScheduledTask -TaskName "Solar Energy Tracker - NYSEG Daily Sync"'
         : 'Start-ScheduledTask -TaskName "Sunrun Daily Download and Copy"; Start-ScheduledTask -TaskName "Solar Energy Tracker - NYSEG Daily Sync"';
 
+    const buildSteps = (overrides = {}) => [
+      {
+        id: 'dispatch',
+        label: `1. Dispatch Task Scheduler trigger (${target === 'both' ? 'SunRun & NYSEG' : target.toUpperCase()})`,
+        status: 'running',
+        detail: 'Connecting to local/LAN Vite runner (/heliospulse-portal/api/run-task)...',
+        ...overrides.dispatch,
+      },
+      {
+        id: 'execute',
+        label: '2. Execute Windows scheduled task & download/validate scripts',
+        status: 'pending',
+        detail: 'Waiting for Start-ScheduledTask confirmation...',
+        ...overrides.execute,
+      },
+      {
+        id: 'sync',
+        label: '3. Re-sync CSVs & rebuild HeliosPulse telemetry snapshot',
+        status: 'pending',
+        detail: 'Pending task completion...',
+        ...overrides.sync,
+      },
+      {
+        id: 'refresh',
+        label: '4. Refresh UI records, alerts & credit forecast',
+        status: 'pending',
+        detail: 'Pending telemetry sync...',
+        ...overrides.refresh,
+      },
+    ];
+
+    setTaskExecutionSteps(buildSteps());
     setTaskRunBanner({
       tone: 'info',
       title: `Starting ${labelMap[target] || target}...`,
@@ -913,22 +992,23 @@ function HeliosPulsePortalInner() {
     });
 
     try {
-      const resp = await fetch('/heliospulse-portal/api/run-task', {
+      const resp = await fetchLocalRunnerApi('/heliospulse-portal/api/run-task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target }),
       });
-
-      const contentType = resp.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        throw new Error('LOCAL_API_UNAVAILABLE');
-      }
 
       const data = await resp.json();
       mergeTaskSchedulerPayload(data);
 
       if (!resp.ok || data.ok === false) {
         const errMsg = (data.errors && data.errors.join(' | ')) || data.error || `HTTP ${resp.status}`;
+        setTaskExecutionSteps(
+          buildSteps({
+            dispatch: { status: 'error', detail: errMsg },
+            execute: { status: 'error', detail: `Task Scheduler did not start: ${errMsg}` },
+          })
+        );
         setTaskRunBanner({
           tone: 'error',
           title: `Could not trigger ${labelMap[target]}`,
@@ -938,10 +1018,17 @@ function HeliosPulsePortalInner() {
         return;
       }
 
+      const startedNames = (data.runResults || []).filter((r) => r.triggered).map((r) => r.taskName).join(', ');
+      setTaskExecutionSteps(
+        buildSteps({
+          dispatch: { status: 'done', detail: `Triggered: ${startedNames || labelMap[target]}` },
+          execute: { status: 'running', detail: 'Task Scheduler running script; streaming log steps every 2s...' },
+        })
+      );
       setTaskRunBanner({
-        tone: 'success',
-        title: `Triggered ${labelMap[target]}`,
-        detail: 'Windows Task Scheduler accepted the run request. Polling task status and syncing CSV files when finished...',
+        tone: 'info',
+        title: `Running ${labelMap[target]}`,
+        detail: 'Windows Task Scheduler accepted the run request. Live execution steps are streaming below.',
       });
 
       let attempts = 0;
@@ -949,26 +1036,83 @@ function HeliosPulsePortalInner() {
       taskPollTimerRef.current = setInterval(async () => {
         attempts += 1;
         const latest = await refreshTaskSchedulerStatus(true);
-        const stillRunning = (latest?.jobs || []).some((j) => j.state === 'Running');
+        const targetJobs = (latest?.jobs || []).filter((j) => target === 'both' || j.key === target);
+        const stillRunning = targetJobs.some((j) => j.state === 'Running');
         if (stillRunning) sawRunning = true;
 
-        if ((!stillRunning && sawRunning) || (!stillRunning && attempts >= 3) || attempts >= 24) {
+        const latestStepSummaries = targetJobs
+          .map((j) => {
+            const lastLine = j.logInfo?.recentSteps?.[j.logInfo.recentSteps.length - 1] || j.logInfo?.summary;
+            return `${j.key.toUpperCase()} (${j.state}): ${lastLine || 'Running...'}`;
+          })
+          .join(' | ');
+
+        if ((!stillRunning && sawRunning) || (!stillRunning && attempts >= 3) || attempts >= 45) {
           stopTaskPolling();
-          setRunningTaskTarget(null);
+          const anyFailed = targetJobs.some((j) => j.lastTaskResult !== null && j.lastTaskResult !== 0);
+          setTaskExecutionSteps(
+            buildSteps({
+              dispatch: { status: 'done', detail: `Triggered: ${startedNames || labelMap[target]}` },
+              execute: {
+                status: anyFailed ? 'error' : 'done',
+                detail: latestStepSummaries || 'Scheduled task finished.',
+              },
+              sync: { status: 'running', detail: 'Running scripts/sync-csv-data.mjs across CSV & bill folders...' },
+            })
+          );
+
           await triggerSyncPipeline();
+          setRunningTaskTarget(null);
+
+          setTaskExecutionSteps(
+            buildSteps({
+              dispatch: { status: 'done', detail: `Triggered: ${startedNames || labelMap[target]}` },
+              execute: {
+                status: anyFailed ? 'error' : 'done',
+                detail: latestStepSummaries || 'Scheduled task finished.',
+              },
+              sync: { status: 'done', detail: 'CSV data, weather/irradiance, and PDF bills synced.' },
+              refresh: {
+                status: anyFailed ? 'error' : 'done',
+                detail: anyFailed
+                  ? 'UI refreshed, though at least one scheduled task exited with an error — inspect Latest Run Steps below.'
+                  : `Portal updated cleanly at ${latest?.checkedAt || new Date().toLocaleTimeString()}.`,
+              },
+            })
+          );
           setTaskRunBanner({
-            tone: 'success',
-            title: `${labelMap[target]} finished — CSV data synced`,
-            detail: `Checked at ${latest?.checkedAt || new Date().toLocaleTimeString()}. Latest Task Scheduler status and CSV telemetry refreshed.`,
+            tone: anyFailed ? 'warning' : 'success',
+            title: anyFailed
+              ? `${labelMap[target]} finished with a script error — inspect steps below`
+              : `${labelMap[target]} finished — CSV data synced`,
+            detail: `Checked at ${latest?.checkedAt || new Date().toLocaleTimeString()}. Review each job's Latest Run Steps below.`,
           });
+        } else {
+          setTaskExecutionSteps(
+            buildSteps({
+              dispatch: { status: 'done', detail: `Triggered: ${startedNames || labelMap[target]}` },
+              execute: {
+                status: 'running',
+                detail: latestStepSummaries || `Polling Task Scheduler (check ${attempts})...`,
+              },
+            })
+          );
         }
-      }, 3000);
+      }, 2000);
     } catch {
       setRunningTaskTarget(null);
+      setTaskExecutionSteps(
+        buildSteps({
+          dispatch: {
+            status: 'error',
+            detail: 'No local/LAN Vite API responded on this origin, http://localhost:5173, or custom Runner URL.',
+          },
+        })
+      );
       setTaskRunBanner({
         tone: 'warning',
-        title: 'Local runner API unavailable in static preview',
-        detail: `Run in local Vite dev mode (npm run dev) for one-click execution, or execute in PowerShell: ${psFallbackCmd}`,
+        title: 'Local runner API unreachable from this page',
+        detail: `Start the local server with "npm run dev" (or "npm run dev:lan" for mobile Wi-Fi), restart Vite if it was already open, or set Runner URL below. Manual PowerShell: ${psFallbackCmd}`,
       });
     }
   };
@@ -1294,7 +1438,7 @@ function HeliosPulsePortalInner() {
     setActiveSyncStep(1);
 
     try {
-      const resp = await fetch('/heliospulse-portal/api/sync-csv');
+      const resp = await fetchLocalRunnerApi('/heliospulse-portal/api/sync-csv');
       if (resp.ok) {
         const fresh = await resp.json();
         applyFreshTelemetrySnapshot(fresh, 'manual/scheduled sync');
@@ -4396,19 +4540,134 @@ function HeliosPulsePortalInner() {
               </div>
             )}
 
+            {taskExecutionSteps.length > 0 && (
+              <div className={`rounded-2xl border p-4 space-y-2.5 ${cardBg}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold">
+                    <Activity className="w-4 h-4 text-[#e07a16]" />
+                    <span>Live Job Runner Steps</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTaskExecutionSteps([])}
+                    className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                      darkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-[#dcd8ce] hover:bg-[#faf8f4]'
+                    }`}
+                  >
+                    Clear Steps
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {taskExecutionSteps.map((st) => {
+                    const pillClass =
+                      st.status === 'done'
+                        ? 'bg-[#1f7a4c]/12 text-[#1f7a4c]'
+                        : st.status === 'running'
+                        ? 'bg-[#e07a16]/15 text-[#b45309]'
+                        : st.status === 'error'
+                        ? 'bg-[#b91c1c]/12 text-[#b91c1c]'
+                        : darkMode
+                        ? 'bg-slate-800 text-slate-400'
+                        : 'bg-[#efece4] text-[#6b675e]';
+                    const badgeLabel =
+                      st.status === 'done'
+                        ? 'Done'
+                        : st.status === 'running'
+                        ? 'Running'
+                        : st.status === 'error'
+                        ? 'Error'
+                        : 'Waiting';
+                    return (
+                      <div
+                        key={st.id}
+                        className={`rounded-xl border p-3 text-xs space-y-1 ${
+                          darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#e6e2d8]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold">{st.label}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${pillClass}`}>
+                            {badgeLabel}
+                          </span>
+                        </div>
+                        <div className={`text-[11px] font-mono leading-snug break-words ${mutedText}`}>
+                          {st.detail}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Windows Task Scheduler Job Info */}
             <div className={`rounded-2xl border p-6 space-y-4 ${cardBg}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-[#e07a16]" />
                   <h3 className="font-semibold text-sm">Windows Task Scheduler Jobs</h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      connectedRunnerOrigin
+                        ? 'bg-[#1f7a4c]/12 text-[#1f7a4c]'
+                        : darkMode
+                        ? 'bg-slate-800 text-slate-300'
+                        : 'bg-[#efece4] text-[#6b675e]'
+                    }`}
+                  >
+                    {connectedRunnerOrigin ? `Runner Connected (${connectedRunnerOrigin})` : 'Static Snapshot'}
+                  </span>
                 </div>
-                <span className={`text-[11px] font-mono ${mutedText}`}>
-                  {taskSchedulerData?.checkedAt
-                    ? `Last queried ${taskSchedulerData.checkedAt}`
-                    : 'Snapshot from telemetryData.json'}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRunnerSettings((v) => !v)}
+                    className={`px-2.5 py-1 rounded-full border text-[11px] font-medium transition ${
+                      darkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-[#dcd8ce] hover:bg-[#faf8f4]'
+                    }`}
+                  >
+                    {showRunnerSettings ? 'Hide Runner URL' : 'Mobile / Runner URL'}
+                  </button>
+                  <span className={`text-[11px] font-mono ${mutedText}`}>
+                    {taskSchedulerData?.checkedAt
+                      ? `Last queried ${taskSchedulerData.checkedAt}`
+                      : 'Snapshot from telemetryData.json'}
+                  </span>
+                </div>
               </div>
+
+              {showRunnerSettings && (
+                <div className={`rounded-xl border p-3 text-xs space-y-2 ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-[#faf8f4] border-[#e6e2d8]'}`}>
+                  <div className="font-semibold">Local / Mobile Vite Runner URL (optional)</div>
+                  <div className={`text-[11px] ${mutedText}`}>
+                    Start your PC server with <code className="font-mono">npm run dev</code> (localhost) or <code className="font-mono">npm run dev:lan</code> (Wi-Fi/Tailscale mobile access), then enter e.g. <code className="font-mono">http://192.168.1.50:5173</code> or leave blank to auto-detect <code className="font-mono">localhost:5173</code>.
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={runnerBaseUrl}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRunnerBaseUrl(val);
+                        try {
+                          window.localStorage.setItem('heliospulse_runner_url', val);
+                        } catch {}
+                      }}
+                      placeholder="http://localhost:5173 or http://192.168.x.x:5173"
+                      className={`flex-1 min-w-[220px] px-3 py-1.5 rounded-lg border font-mono text-[11px] ${
+                        darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-[#dcd8ce]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => refreshTaskSchedulerStatus(false)}
+                      className="px-3 py-1.5 rounded-full bg-[#1a1917] text-white text-[11px] font-semibold"
+                    >
+                      Test Connection
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {(taskSchedulerData?.jobs || []).map((job) => {
@@ -4424,6 +4683,7 @@ function HeliosPulsePortalInner() {
                     : exitOk
                     ? 'bg-[#1f7a4c]/12 text-[#1f7a4c]'
                     : 'bg-[#b91c1c]/12 text-[#b91c1c]';
+                  const recentSteps = job.logInfo?.recentSteps || [];
 
                   return (
                     <div
@@ -4476,12 +4736,36 @@ function HeliosPulsePortalInner() {
                       </div>
 
                       {job.logInfo && (
-                        <div className={`rounded-lg px-2.5 py-2 text-[11px] font-mono border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-[#ece8de]'}`}>
+                        <div className={`rounded-lg px-2.5 py-2 text-[11px] font-mono border space-y-1.5 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-[#ece8de]'}`}>
                           <div className="flex items-center justify-between gap-2 text-[10px] opacity-75">
-                            <span className="truncate">{job.logInfo.logFile}</span>
+                            <span className="truncate font-semibold">{job.logInfo.logFile}</span>
                             <span className="shrink-0">{job.logInfo.updatedAt}</span>
                           </div>
-                          <div className="mt-0.5 leading-snug break-words">{job.logInfo.summary}</div>
+                          <div className="leading-snug break-words">{job.logInfo.summary}</div>
+                          {recentSteps.length > 0 && (
+                            <div className={`pt-1.5 border-t ${dividerBorder} space-y-1 max-h-44 overflow-y-auto`}>
+                              <div className={`text-[10px] font-sans font-semibold uppercase tracking-wider ${mutedText}`}>
+                                Latest Run Steps ({recentSteps.length})
+                              </div>
+                              {recentSteps.map((stepLine, idx) => {
+                                const isErr = /ERROR|FAILED|invalid|not found/i.test(stepLine);
+                                const isOk = /complete|valid|sent successfully|saved|Syntax verified|updated/i.test(stepLine);
+                                const dotColor = isErr
+                                  ? 'bg-[#b91c1c]'
+                                  : isOk
+                                  ? 'bg-[#1f7a4c]'
+                                  : 'bg-[#e07a16]';
+                                return (
+                                  <div key={idx} className="flex items-start gap-1.5 text-[10.5px] leading-snug">
+                                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dotColor}`} />
+                                    <span className={isErr ? 'text-[#b91c1c] font-semibold break-words' : 'break-words'}>
+                                      {stepLine}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
 

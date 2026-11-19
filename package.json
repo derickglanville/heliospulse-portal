@@ -6,6 +6,7 @@
   "scripts": {
     "sync-data": "node scripts/sync-csv-data.mjs",
     "dev": "node scripts/sync-csv-data.mjs && vite",
+    "dev:lan": "node scripts/sync-csv-data.mjs && vite --host",
     "build": "node scripts/sync-csv-data.mjs && vite build",
     "preview": "vite preview"
   },
