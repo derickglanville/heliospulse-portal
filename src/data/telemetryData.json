@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-19T00:59:22.099Z",
+    "generated_at": "2026-11-19T01:17:39.426Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -65,7 +65,7 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-19T00:59:22.102Z",
+    "last_checked_at": "2026-11-19T01:17:39.432Z",
     "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []
@@ -1092,7 +1092,132 @@
       "credit_bank_after_kwh": 1758.4,
       "credit_bank_delta_kwh": -451.6,
       "summary": "Projected bill (2026-11-04 to 2026-12-03): $43.57 energy charge • Bank shifts 2,210 -> 1,758 kWh (-451.6 kWh)"
-    }
+    },
+    "historical_usage_analysis": [
+      {
+        "month_label": "November 2026",
+        "billing_start_date": "2026-10-07",
+        "billing_end_date": "2026-11-03",
+        "usage_kwh": 437,
+        "charges": 43.57,
+        "imported": true,
+        "source_name": "10_07_26 - 11_03_26.pdf",
+        "usage_display": "437 kWh imported",
+        "billing_period_display": "Billing period: 2026-10-07 to 2026-11-03"
+      },
+      {
+        "month_label": "October 2026",
+        "billing_start_date": "2026-09-04",
+        "billing_end_date": "2026-10-06",
+        "usage_kwh": 495,
+        "charges": 43.57,
+        "imported": true,
+        "usage_display": "495 kWh imported",
+        "billing_period_display": "Billing period: 2026-09-04 to 2026-10-06"
+      },
+      {
+        "month_label": "September 2026",
+        "billing_start_date": "2026-08-06",
+        "billing_end_date": "2026-09-03",
+        "usage_kwh": 518,
+        "charges": 43.57,
+        "imported": true,
+        "usage_display": "518 kWh imported",
+        "billing_period_display": "Billing period: 2026-08-06 to 2026-09-03"
+      },
+      {
+        "month_label": "August 2026",
+        "billing_start_date": "2026-07-16",
+        "billing_end_date": "2026-08-05",
+        "usage_kwh": 391,
+        "charges": 30.49,
+        "imported": true,
+        "usage_display": "391 kWh imported",
+        "billing_period_display": "Billing period: 2026-07-16 to 2026-08-05"
+      },
+      {
+        "month_label": "July 2026",
+        "billing_start_date": "2026-06-05",
+        "billing_end_date": "2026-07-15",
+        "usage_kwh": 537,
+        "charges": 162.3,
+        "combined_period": true,
+        "usage_display": "537 kWh",
+        "billing_period_display": "Combined statements: 2026-06-05 to 2026-07-15"
+      },
+      {
+        "month_label": "June 2026",
+        "billing_start_date": "2026-05-06",
+        "billing_end_date": "2026-06-04",
+        "usage_kwh": 1913,
+        "charges": 512.25,
+        "usage_display": "1,913 kWh",
+        "billing_period_display": "Billing period: 2026-05-06 to 2026-06-04"
+      },
+      {
+        "month_label": "May 2026",
+        "billing_start_date": "2026-04-07",
+        "billing_end_date": "2026-05-05",
+        "usage_kwh": 1473,
+        "charges": 424.25,
+        "usage_display": "1,473 kWh",
+        "billing_period_display": "Billing period: 2026-04-07 to 2026-05-05"
+      },
+      {
+        "month_label": "April 2026",
+        "billing_start_date": "2026-03-04",
+        "billing_end_date": "2026-04-06",
+        "usage_kwh": 3485,
+        "charges": 964.08,
+        "usage_display": "3,485 kWh",
+        "billing_period_display": "Billing period: 2026-03-04 to 2026-04-06"
+      },
+      {
+        "month_label": "March 2026",
+        "billing_start_date": "2026-02-05",
+        "billing_end_date": "2026-03-03",
+        "usage_kwh": 3160,
+        "charges": 852.35,
+        "usage_display": "3,160 kWh",
+        "billing_period_display": "Billing period: 2026-02-05 to 2026-03-03"
+      },
+      {
+        "month_label": "February 2026",
+        "billing_start_date": "2026-01-07",
+        "billing_end_date": "2026-02-04",
+        "usage_kwh": 1419,
+        "charges": 416.73,
+        "usage_display": "1,419 kWh",
+        "billing_period_display": "Billing period: 2026-01-07 to 2026-02-04"
+      },
+      {
+        "month_label": "January 2026",
+        "billing_start_date": "2025-12-06",
+        "billing_end_date": "2026-01-06",
+        "usage_kwh": 1955,
+        "charges": 518.76,
+        "usage_display": "1,955 kWh",
+        "billing_period_display": "Billing period: 2025-12-06 to 2026-01-06"
+      },
+      {
+        "month_label": "December 2025",
+        "billing_start_date": "2025-11-05",
+        "billing_end_date": "2025-12-05",
+        "usage_kwh": 2296,
+        "charges": 506.01,
+        "usage_display": "2,296 kWh",
+        "billing_period_display": "Billing period: 2025-11-05 to 2025-12-05"
+      },
+      {
+        "month_label": "November 2025",
+        "billing_start_date": "2025-10-07",
+        "billing_end_date": "2025-11-04",
+        "usage_kwh": 523,
+        "charges": 146.96,
+        "usage_display": "523 kWh",
+        "billing_period_display": "Billing period: 2025-10-07 to 2025-11-04"
+      }
+    ]
   },
   "bill_summary": {
     "file_count": 6,

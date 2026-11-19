@@ -15,10 +15,12 @@ export default function NysegMonthlyBillsTab({
   dividerBorder,
   pillBtnSecondary,
 }) {
+  const [viewMode, setViewMode] = useState('current'); // 'current' | 'historical'
   const [billFilter, setBillFilter] = useState('authoritative'); // 'all' | 'authoritative' | 'post_solar' | 'pre_solar'
   const [expandedIdx, setExpandedIdx] = useState(null);
 
   const bills = moreBillsData?.bills || [];
+  const historicalRows = moreBillsData?.historical_usage_analysis || [];
   const creditHistory = moreBillsData?.credit_bank_history || [];
   const creditHistoryDesc = useMemo(() => [...creditHistory].reverse(), [creditHistory]);
   const projection = moreBillsData?.next_bill_projection || null;
@@ -49,14 +51,31 @@ export default function NysegMonthlyBillsTab({
           </p>
         </div>
 
-        <button
-          onClick={onRescanBills}
-          disabled={isSyncing}
-          className={`px-4 py-2 rounded-full border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${pillBtnSecondary}`}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-[#1f7a4c] ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>{isSyncing ? 'Scanning Bills...' : 'Scan Bills Folder'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMode((m) => (m === 'current' ? 'historical' : 'current'))}
+            className={`px-4 py-2 rounded-full border text-xs font-semibold transition cursor-pointer ${
+              viewMode === 'historical'
+                ? darkMode
+                  ? 'bg-amber-400 text-slate-950 border-amber-400'
+                  : 'bg-[#1a1917] text-white border-[#1a1917]'
+                : pillBtnSecondary
+            }`}
+            title="Toggle between current bills breakdown and Historical Usage Analysis"
+          >
+            {viewMode === 'historical' ? '← Current Bills & Credit Bank' : 'Historical Usage Analysis'}
+          </button>
+
+          <button
+            onClick={onRescanBills}
+            disabled={isSyncing}
+            className={`px-4 py-2 rounded-full border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${pillBtnSecondary}`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[#1f7a4c] ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Scanning Bills...' : 'Scan Bills Folder'}</span>
+          </button>
+        </div>
       </div>
 
       {lastFolderEvent && (
@@ -65,6 +84,73 @@ export default function NysegMonthlyBillsTab({
           <span>{lastFolderEvent}</span>
         </div>
       )}
+
+      {viewMode === 'historical' ? (
+        <div className={`rounded-2xl border overflow-hidden ${cardBg}`}>
+          <div className={`p-6 border-b ${dividerBorder} flex flex-wrap items-start justify-between gap-3`}>
+            <div>
+              <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>
+                HISTORICAL USAGE ANALYSIS
+              </div>
+              <h2 className="text-xl font-bold tracking-tight mt-0.5">
+                NYSEG electricity usage and charges
+              </h2>
+              <p className={`text-xs sm:text-[13px] mt-1 ${mutedText}`}>
+                Electricity charges exclude unrelated prior balances and payment arrangements. New final NYSEG statements are added automatically.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewMode('current')}
+              className={`px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${pillBtnSecondary}`}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr
+                  className={`border-b ${dividerBorder} ${
+                    darkMode ? 'bg-slate-950 text-slate-300' : 'bg-[#efece4] text-[#1a1917]'
+                  } text-xs font-bold`}
+                >
+                  <th className="py-3 px-5">Month</th>
+                  <th className="py-3 px-5 text-right">Electricity usage</th>
+                  <th className="py-3 px-5 text-right">Electricity charges*</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${dividerBorder} text-xs sm:text-sm`}>
+                {historicalRows.map((row) => (
+                  <tr
+                    key={`${row.month_label}-${row.billing_start_date}-${row.billing_end_date}`}
+                    title={row.source_name || 'Reviewed NYSEG billing file'}
+                    className={darkMode ? 'hover:bg-slate-800/35 transition' : 'hover:bg-[#faf8f4] transition'}
+                  >
+                    <td className="py-3 px-5">
+                      <div className="font-semibold">{row.month_label}</div>
+                      <div className={`text-[11px] font-mono ${mutedText}`}>
+                        {row.billing_period_display}
+                      </div>
+                    </td>
+                    <td className="py-3 px-5 text-right font-mono font-medium">
+                      {row.usage_display}
+                    </td>
+                    <td className="py-3 px-5 text-right font-mono font-bold">
+                      ${Number(row.charges || 0).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className={`px-5 py-3 border-t text-[11px] ${dividerBorder} ${mutedText}`}>
+            * Charges reflect NYSEG current electricity delivery, supply, taxes, and recurring fees per reviewed billing period ({historicalRows.length} months shown).
+          </div>
+        </div>
+      ) : (
+        <>
 
       {/* TOP 4 KPI SUMMARY CALLOUTS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -361,6 +447,8 @@ export default function NysegMonthlyBillsTab({
           })}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

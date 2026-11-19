@@ -214,7 +214,62 @@ def load_more_bills(bills_dir: Path = MORE_BILLS_DIR) -> dict[str, Any]:
         "credit_bank_history": credit_bank_history,
         "current_credit_bank_kwh": credit_bank_history[-1]["remaining_kwh"] if credit_bank_history else 0.0,
         "next_bill_projection": next_bill_projection,
+        "historical_usage_analysis": _build_historical_usage_analysis_rows(authoritative_asc),
     }
+
+
+HISTORICAL_USAGE_ANALYSIS_BASELINE: tuple[dict[str, Any], ...] = (
+    {"month_label": "November 2025", "billing_start_date": "2025-10-07", "billing_end_date": "2025-11-04", "usage_kwh": 523.0, "charges": 146.96},
+    {"month_label": "December 2025", "billing_start_date": "2025-11-05", "billing_end_date": "2025-12-05", "usage_kwh": 2296.0, "charges": 506.01},
+    {"month_label": "January 2026", "billing_start_date": "2025-12-06", "billing_end_date": "2026-01-06", "usage_kwh": 1955.0, "charges": 518.76},
+    {"month_label": "February 2026", "billing_start_date": "2026-01-07", "billing_end_date": "2026-02-04", "usage_kwh": 1419.0, "charges": 416.73},
+    {"month_label": "March 2026", "billing_start_date": "2026-02-05", "billing_end_date": "2026-03-03", "usage_kwh": 3160.0, "charges": 852.35},
+    {"month_label": "April 2026", "billing_start_date": "2026-03-04", "billing_end_date": "2026-04-06", "usage_kwh": 3485.0, "charges": 964.08},
+    {"month_label": "May 2026", "billing_start_date": "2026-04-07", "billing_end_date": "2026-05-05", "usage_kwh": 1473.0, "charges": 424.25},
+    {"month_label": "June 2026", "billing_start_date": "2026-05-06", "billing_end_date": "2026-06-04", "usage_kwh": 1913.0, "charges": 512.25},
+    {"month_label": "July 2026", "billing_start_date": "2026-06-05", "billing_end_date": "2026-07-15", "usage_kwh": 537.0, "charges": 162.30, "combined_period": True},
+    {"month_label": "August 2026", "billing_start_date": "2026-07-16", "billing_end_date": "2026-08-05", "usage_kwh": 391.0, "charges": 30.49, "imported": True},
+    {"month_label": "September 2026", "billing_start_date": "2026-08-06", "billing_end_date": "2026-09-03", "usage_kwh": 518.0, "charges": 43.57, "imported": True},
+    {"month_label": "October 2026", "billing_start_date": "2026-09-04", "billing_end_date": "2026-10-06", "usage_kwh": 495.0, "charges": 43.57, "imported": True},
+)
+
+
+def _build_historical_usage_analysis_rows(authoritative_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = [dict(row) for row in HISTORICAL_USAGE_ANALYSIS_BASELINE]
+    latest_baseline_end = max(row["billing_end_date"] for row in rows)
+    seen_periods = {(row["billing_start_date"], row["billing_end_date"]): idx for idx, row in enumerate(rows)}
+
+    for record in authoritative_records:
+        start = str(record.get("billing_start_date") or "")
+        end = str(record.get("billing_end_date") or "")
+        if not start or not end or end <= latest_baseline_end:
+            continue
+        usage = float(record.get("imported_kwh") or 0.0)
+        charges = float(record.get("total_energy_charges") or 0.0)
+        if usage <= 0 or charges < 0:
+            continue
+        row = {
+            "month_label": date.fromisoformat(end).strftime("%B %Y"),
+            "billing_start_date": start,
+            "billing_end_date": end,
+            "usage_kwh": usage,
+            "charges": charges,
+            "imported": bool(record.get("exported_kwh") or record.get("remaining_excess_generation_kwh") is not None),
+            "source_name": str(record.get("file_name") or "NYSEG statement"),
+        }
+        key = (start, end)
+        if key in seen_periods:
+            rows[seen_periods[key]] = row
+        else:
+            seen_periods[key] = len(rows)
+            rows.append(row)
+
+    rows.sort(key=lambda r: r["billing_end_date"], reverse=True)
+    for row in rows:
+        row["usage_display"] = f"{row['usage_kwh']:,.0f} kWh" + (" imported" if row.get("imported") else "")
+        prefix = "Combined statements" if row.get("combined_period") else "Billing period"
+        row["billing_period_display"] = f"{prefix}: {row['billing_start_date']} to {row['billing_end_date']}"
+    return rows
 
 
 if __name__ == "__main__":
