@@ -11,6 +11,7 @@ const CODEX_ROOT = 'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - Sun
 const DEFAULT_SUNRUN_CSV = path.join(CODEX_ROOT, 'SunRun Data', 'Sunrun_Daily_Production_Data.csv');
 const DEFAULT_NYSEG_CSV = path.join(CODEX_ROOT, 'SunRun Data', 'NYSEG_Daily_Usage_Data.csv');
 const DEFAULT_APP_JSON = path.join(CODEX_ROOT, 'JSON', 'application_data_current.json');
+const DEFAULT_HISTORY_JSON = path.join(CODEX_ROOT, 'JSON', 'Solar_Daily_History.json');
 
 const sunrunCsvPath = process.env.SUNRUN_CSV_PATH || DEFAULT_SUNRUN_CSV;
 const nysegCsvPath = process.env.NYSEG_CSV_PATH || DEFAULT_NYSEG_CSV;
@@ -61,6 +62,11 @@ const KNOWN_WEATHER_OVERRIDES = {
   '2026-11-04': 'Overcast',
 };
 
+// Known Open-Meteo peak irradiance values where Solar_Daily_History / application_data_current had gaps
+const KNOWN_IRRADIANCE_OVERRIDES = {
+  '2026-11-08': 428,
+};
+
 // Optional enrichment from application_data_current.json
 const appEntriesByDate = new Map();
 if (fs.existsSync(DEFAULT_APP_JSON)) {
@@ -80,6 +86,21 @@ if (fs.existsSync(DEFAULT_APP_JSON)) {
       message: err.message,
       dates: [],
     });
+  }
+}
+
+// Secondary historical weather & Open-Meteo irradiance enrichment from Solar_Daily_History.json
+const historyEntriesByDate = new Map();
+if (fs.existsSync(DEFAULT_HISTORY_JSON)) {
+  try {
+    const historyData = JSON.parse(fs.readFileSync(DEFAULT_HISTORY_JSON, 'utf8'));
+    for (const entry of historyData.entries || []) {
+      if (entry.date) {
+        historyEntriesByDate.set(entry.date, entry);
+      }
+    }
+  } catch (err) {
+    console.warn('[sync-csv-data] Warning: Could not parse Solar_Daily_History.json:', err.message);
   }
 }
 
@@ -218,6 +239,7 @@ const dailyRows = allDates.map((date, idx) => {
   const sr = srMap.get(date) || { solar_kwh: 0, eod_meter_kwh: 0 };
   const ny = nyMap.get(date) || null;
   const appEntry = appEntriesByDate.get(date) || null;
+  const historyEntry = historyEntriesByDate.get(date) || null;
 
   const hasSunrun = sr.solar_kwh > 0 || (sr.eod_meter_kwh > 0 && date <= '2026-11-15');
   const hasNyseg = ny !== null && ny.hours > 0;
@@ -237,20 +259,42 @@ const dailyRows = allDates.map((date, idx) => {
   const minTemp =
     appEntry?.temperature_low_f != null
       ? Math.round(Number(appEntry.temperature_low_f))
+      : historyEntry?.low_f != null
+      ? Math.round(Number(historyEntry.low_f))
       : hasNyseg && ny.temps.length > 0
       ? Math.min(...ny.temps)
       : null;
   const maxTemp =
     appEntry?.temperature_high_f != null
       ? Math.round(Number(appEntry.temperature_high_f))
+      : historyEntry?.high_f != null
+      ? Math.round(Number(historyEntry.high_f))
       : hasNyseg && ny.temps.length > 0
       ? Math.max(...ny.temps)
       : null;
 
-  const irradiance_wm2 =
-    appEntry?.irradiance_peak_wm2 != null ? Math.round(Number(appEntry.irradiance_peak_wm2)) : null;
+  const appIrr =
+    appEntry?.irradiance_peak_wm2 != null ? Math.round(Number(appEntry.irradiance_peak_wm2)) : 0;
+  const histIrr =
+    historyEntry?.irradiance_w_m2 != null ? Math.round(Number(historyEntry.irradiance_w_m2)) : 0;
+  const overrideIrr = KNOWN_IRRADIANCE_OVERRIDES[date] || 0;
 
-  const rawWeather = appEntry?.weather && appEntry.weather !== 'Unknown' ? appEntry.weather : null;
+  let irradiance_wm2 = null;
+  let irradiance_source = null;
+  if (appIrr > 0) {
+    irradiance_wm2 = appIrr;
+    irradiance_source = 'Open-Meteo daily entry (application_data_current.json)';
+  } else if (histIrr > 0) {
+    irradiance_wm2 = histIrr;
+    irradiance_source = historyEntry?.source?.irradiance || 'Solar_Daily_History.json (Open-Meteo)';
+  } else if (overrideIrr > 0) {
+    irradiance_wm2 = overrideIrr;
+    irradiance_source = 'Open-Meteo historical archive (Yorktown Heights, NY)';
+  }
+
+  const rawWeather =
+    (appEntry?.weather && appEntry.weather !== 'Unknown' ? appEntry.weather : null) ||
+    (historyEntry?.weather && historyEntry.weather !== 'Unknown' ? historyEntry.weather : null);
   const weather_label =
     KNOWN_WEATHER_OVERRIDES[date] || rawWeather || classifyIrradiance(solar_kwh, date);
 
@@ -290,6 +334,7 @@ const dailyRows = allDates.map((date, idx) => {
     temp_min_f: minTemp,
     temp_max_f: maxTemp,
     irradiance_wm2,
+    irradiance_source,
     nyseg_hours: hasNyseg ? ny.hours : 0,
     irradiance: weather_label,
     status,

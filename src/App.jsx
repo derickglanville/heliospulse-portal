@@ -109,30 +109,38 @@ const NOV_GRID_OVERRIDES = {
   '2026-11-04': { cond: 'Overcast', irr: 526, sun: '+33.2°' },
 };
 
-function getSolarAstronomyForDate(dateStr, solarKwh, fallbackIrrLabel, rowIrrWm2) {
-  if (NOV_GRID_OVERRIDES[dateStr]) {
-    return {
-      sunHeight: NOV_GRID_OVERRIDES[dateStr].sun,
-      irradianceWm2: `${NOV_GRID_OVERRIDES[dateStr].irr} W/m²`,
-      irradianceNum: NOV_GRID_OVERRIDES[dateStr].irr,
-      weatherCond: NOV_GRID_OVERRIDES[dateStr].cond,
-    };
-  }
+function getSolarAstronomyForDate(dateStr, solarKwh, fallbackIrrLabel, rowIrrWm2, rowIrrSource) {
   const d = new Date(`${dateStr}T12:00:00Z`);
   const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 0));
   const dayOfYear = Math.floor((d - start) / (1000 * 60 * 60 * 24));
   const declination = 23.45 * Math.sin(((2 * Math.PI) / 365) * (dayOfYear - 81));
   const latitude = 41.32;
   const peakElevation = Math.max(15, 90 - latitude + declination);
-  const peakIrradiance =
-    rowIrrWm2 != null
-      ? Math.round(rowIrrWm2)
-      : Math.round(Math.min(980, Math.max(180, solarKwh * 17.5 + 160)));
+  const sunHeightFormula = `90° − ${latitude}° (lat) + (${declination.toFixed(1)}° dec) = +${peakElevation.toFixed(1)}°`;
+
+  if (NOV_GRID_OVERRIDES[dateStr]) {
+    return {
+      sunHeight: NOV_GRID_OVERRIDES[dateStr].sun,
+      irradianceWm2: `${NOV_GRID_OVERRIDES[dateStr].irr} W/m²`,
+      irradianceNum: NOV_GRID_OVERRIDES[dateStr].irr,
+      weatherCond: NOV_GRID_OVERRIDES[dateStr].cond,
+      irradianceOrigin: 'Open-Meteo peak irradiance archive (NYSEG historical table)',
+      sunHeightFormula,
+    };
+  }
+  const hasMeasuredIrr = rowIrrWm2 != null && Number(rowIrrWm2) > 0;
+  const peakIrradiance = hasMeasuredIrr
+    ? Math.round(Number(rowIrrWm2))
+    : Math.round(Math.min(980, Math.max(180, solarKwh * 17.5 + 160)));
   return {
     sunHeight: `+${peakElevation.toFixed(1)}°`,
     irradianceWm2: `${peakIrradiance} W/m²`,
     irradianceNum: peakIrradiance,
     weatherCond: fallbackIrrLabel || 'Clear',
+    irradianceOrigin: hasMeasuredIrr
+      ? rowIrrSource || 'Open-Meteo peak irradiance archive'
+      : `Estimated from daily SunRun production: clamp(180..980, ${solarKwh.toFixed(1)} × 17.5 + 160)`,
+    sunHeightFormula,
   };
 }
 
@@ -269,6 +277,15 @@ function HeliosPulsePortalInner() {
   const [gridPopOut, setGridPopOut] = useState(false);
   const [gridNotes, setGridNotes] = useState({});
   const [selectedGridRows, setSelectedGridRows] = useState([]);
+  const [hoveredDerivation, setHoveredDerivation] = useState(null);
+  const showCellDerivation = (e, spec) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setHoveredDerivation({
+      ...spec,
+      rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width },
+    });
+  };
+  const hideCellDerivation = () => setHoveredDerivation(null);
   const toggleSelectGridRow = (rowDate) => {
     setSelectedGridRows((prev) =>
       prev.includes(rowDate) ? prev.filter((d) => d !== rowDate) : [...prev, rowDate]
@@ -377,7 +394,8 @@ function HeliosPulsePortalInner() {
         r.date,
         solar,
         r.irradiance || sourceNyseg.irradiance,
-        r.irradiance_wm2
+        r.irradiance_wm2,
+        r.irradiance_source
       );
       const tHigh = r.temp_max_f ?? sourceNyseg.temp_max_f ?? sourceNyseg.temp_f ?? 55;
       const tLow = r.temp_min_f ?? sourceNyseg.temp_min_f ?? sourceNyseg.temp_f ?? 42;
@@ -386,6 +404,7 @@ function HeliosPulsePortalInner() {
         ...r,
         isTempPlaceholder,
         tempSourceDate: isTempPlaceholder ? fallbackDate : null,
+        nysegHours: sourceNyseg.nyseg_hours || 0,
         note: isTempPlaceholder
           ? `Temporary NYSEG record (copied from ${fallbackDate} while NYSEG intervals are pending)`
           : r.note,
@@ -394,7 +413,9 @@ function HeliosPulsePortalInner() {
         tempLow: tLow,
         weatherCond: astro.weatherCond,
         irradianceNum: astro.irradianceNum,
+        irradianceOrigin: astro.irradianceOrigin,
         sunHeight: astro.sunHeight,
+        sunHeightFormula: astro.sunHeightFormula,
         solar_kwh: solar,
         m01_import_kwh: m01,
         running_m01: runM01,
@@ -499,16 +520,33 @@ function HeliosPulsePortalInner() {
 
   const gridSpanKpis = useMemo(() => {
     const rows = visibleGridRows;
+    const rowCount = rows.length;
+    const tempCount = rows.filter((r) => r.isTempPlaceholder).length;
     const power = rows.reduce((a, r) => a + r.solar_kwh, 0);
     const m01 = rows.reduce((a, r) => a + r.m01_import_kwh, 0);
     const m02 = rows.reduce((a, r) => a + r.m02_export_kwh, 0);
     const edc = rows.reduce((a, r) => a + r.edc_kwh, 0);
     const netExport = m02 - m01;
     const dailyBaseFee = 0.948;
-    const costWithSolar = Math.max(0, (m01 - m02) * 0.24 + rows.length * dailyBaseFee);
-    const costWithoutSolar = edc * 0.24 + rows.length * 0.8546;
+    const netEnergyCost = (m01 - m02) * 0.24;
+    const baseFeeTotal = rowCount * dailyBaseFee;
+    const costWithSolar = Math.max(0, netEnergyCost + baseFeeTotal);
+    const histDailyBaseFee = 0.8546;
+    const costWithoutSolar = edc * 0.24 + rowCount * histDailyBaseFee;
 
     return {
+      rowCount,
+      tempCount,
+      spanLabel: activeGridPeriod.label,
+      powerRaw: power,
+      m01Raw: m01,
+      m02Raw: m02,
+      edcRaw: edc,
+      netExportRaw: netExport,
+      netEnergyCostRaw: netEnergyCost,
+      baseFeeTotalRaw: baseFeeTotal,
+      costWithSolarRaw: costWithSolar,
+      costWithoutSolarRaw: costWithoutSolar,
       power: power.toFixed(1),
       m01: Number(m01.toFixed(1)),
       m02: m02.toFixed(1),
@@ -517,7 +555,7 @@ function HeliosPulsePortalInner() {
       costWithSolar: costWithSolar.toFixed(2),
       costWithoutSolar: costWithoutSolar.toFixed(2),
     };
-  }, [visibleGridRows]);
+  }, [visibleGridRows, activeGridPeriod]);
 
   const [selectedDistDate, setSelectedDistDate] = useState(
     TELEMETRY_META.latest_reconciled_date || '2026-11-14'
@@ -1902,7 +1940,10 @@ function HeliosPulsePortalInner() {
           </button>
 
           <button
-            onClick={() => setGridPopOut(!isPopOutModal)}
+            onClick={() => {
+              setHoveredDerivation(null);
+              setGridPopOut(!isPopOutModal);
+            }}
             className={`px-3 py-1 rounded-full border font-semibold transition cursor-pointer flex items-center gap-1 ${
               isPopOutModal ? 'bg-[#1a1917] text-white border-[#1a1917]' : pillBtnSecondary
             }`}
@@ -1928,37 +1969,121 @@ function HeliosPulsePortalInner() {
 
       {/* COMPACT 7-CARD KPI RIBBON */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+        <div
+          onMouseEnter={(e) =>
+            showCellDerivation(e, {
+              title: 'POWER (Total Solar Generated)',
+              badge: `${gridSpanKpis.rowCount} visible rows`,
+              formula: 'Σ SunRun daily solar production (kWh) in active view',
+              calculation: `Sum across ${gridSpanKpis.rowCount} rows (${gridSpanKpis.spanLabel}) = ${gridSpanKpis.powerRaw.toFixed(3)} kWh → ${gridSpanKpis.power} kWh`,
+              source: 'Sunrun_Daily_Production_Data.csv',
+            })
+          }
+          onMouseLeave={hideCellDerivation}
+          className={`px-2.5 py-2 rounded-lg space-y-0.5 cursor-help transition hover:ring-1 hover:ring-[#e07a16]/50 ${calloutBg}`}
+        >
           <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>POWER</div>
           <div className="text-sm font-bold font-mono text-[#e07a16]">{gridSpanKpis.power} kWh</div>
         </div>
 
-        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+        <div
+          onMouseEnter={(e) =>
+            showCellDerivation(e, {
+              title: 'M01 DELIVERED (Grid Import)',
+              badge: `${gridSpanKpis.rowCount} visible rows`,
+              formula: 'Σ NYSEG hourly M01 register (grid → home) across visible rows',
+              calculation: `Sum across ${gridSpanKpis.rowCount} rows (${gridSpanKpis.tempCount} temp placeholder${gridSpanKpis.tempCount === 1 ? '' : 's'}) = ${gridSpanKpis.m01Raw.toFixed(3)} kWh → ${gridSpanKpis.m01} kWh`,
+              source: 'NYSEG_Daily_Usage_Data.csv (hourly Delivered / M01)',
+            })
+          }
+          onMouseLeave={hideCellDerivation}
+          className={`px-2.5 py-2 rounded-lg space-y-0.5 cursor-help transition hover:ring-1 hover:ring-slate-500/40 ${calloutBg}`}
+        >
           <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>M01 DELIVERED</div>
           <div className="text-sm font-bold font-mono">{gridSpanKpis.m01} kWh</div>
         </div>
 
-        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+        <div
+          onMouseEnter={(e) =>
+            showCellDerivation(e, {
+              title: 'M02 RECEIVED (Grid Export)',
+              badge: `${gridSpanKpis.rowCount} visible rows`,
+              formula: 'Σ NYSEG hourly M02 register (solar surplus → grid) across visible rows',
+              calculation: `Sum across ${gridSpanKpis.rowCount} rows (${gridSpanKpis.tempCount} temp placeholder${gridSpanKpis.tempCount === 1 ? '' : 's'}) = ${gridSpanKpis.m02Raw.toFixed(3)} kWh → ${gridSpanKpis.m02} kWh`,
+              source: 'NYSEG_Daily_Usage_Data.csv (hourly Received / M02)',
+            })
+          }
+          onMouseLeave={hideCellDerivation}
+          className={`px-2.5 py-2 rounded-lg space-y-0.5 cursor-help transition hover:ring-1 hover:ring-[#1f7a4c]/50 ${calloutBg}`}
+        >
           <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>M02 RECEIVED</div>
           <div className="text-sm font-bold font-mono text-[#1f7a4c]">{gridSpanKpis.m02} kWh</div>
         </div>
 
-        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+        <div
+          onMouseEnter={(e) =>
+            showCellDerivation(e, {
+              title: 'EDC CONSUMED (Estimated Home Demand)',
+              badge: 'Derived Total',
+              formula: 'Σ (SunRun Power + M01 Delivered − M02 Received)',
+              calculation: `${gridSpanKpis.powerRaw.toFixed(1)} + ${gridSpanKpis.m01Raw.toFixed(1)} − ${gridSpanKpis.m02Raw.toFixed(1)} = ${gridSpanKpis.edcRaw.toFixed(1)} kWh`,
+              source: 'Combined SunRun production + NYSEG smart-meter registers',
+            })
+          }
+          onMouseLeave={hideCellDerivation}
+          className={`px-2.5 py-2 rounded-lg space-y-0.5 cursor-help transition hover:ring-1 hover:ring-[#1a1917]/30 ${calloutBg}`}
+        >
           <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>EDC CONSUMED</div>
           <div className="text-sm font-bold font-mono">{gridSpanKpis.edc} kWh</div>
         </div>
 
-        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+        <div
+          onMouseEnter={(e) =>
+            showCellDerivation(e, {
+              title: 'NET EXPORT (M02 − M01)',
+              badge: 'Derived Net Credit',
+              formula: 'Total M02 Exported − Total M01 Imported',
+              calculation: `${gridSpanKpis.m02Raw.toFixed(1)} − ${gridSpanKpis.m01Raw.toFixed(1)} = ${gridSpanKpis.netExport} kWh`,
+              source: 'Positive (+): net credit added; Negative (−): net grid import',
+            })
+          }
+          onMouseLeave={hideCellDerivation}
+          className={`px-2.5 py-2 rounded-lg space-y-0.5 cursor-help transition hover:ring-1 hover:ring-[#1f7a4c]/50 ${calloutBg}`}
+        >
           <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>NET EXPORT</div>
           <div className="text-sm font-bold font-mono text-[#1f7a4c]">{gridSpanKpis.netExport} kWh</div>
         </div>
 
-        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+        <div
+          onMouseEnter={(e) =>
+            showCellDerivation(e, {
+              title: 'COST W/ SOLAR',
+              badge: 'Net Energy + Basic Charge',
+              formula: 'max(0, (M01 − M02) × $0.24/kWh + days × $0.948/day)',
+              calculation: `max(0, (${gridSpanKpis.m01Raw.toFixed(1)} − ${gridSpanKpis.m02Raw.toFixed(1)}) × $0.24 [${gridSpanKpis.netEnergyCostRaw.toFixed(2)}] + ${gridSpanKpis.rowCount} × $0.948 [$${gridSpanKpis.baseFeeTotalRaw.toFixed(2)}]) = $${gridSpanKpis.costWithSolar}`,
+              source: 'Floored at $0.00 when surplus M02 credits offset usage charges',
+            })
+          }
+          onMouseLeave={hideCellDerivation}
+          className={`px-2.5 py-2 rounded-lg space-y-0.5 cursor-help transition hover:ring-1 hover:ring-[#1a1917]/30 ${calloutBg}`}
+        >
           <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>COST W/ SOLAR</div>
           <div className="text-sm font-bold font-mono">${gridSpanKpis.costWithSolar}</div>
         </div>
 
-        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+        <div
+          onMouseEnter={(e) =>
+            showCellDerivation(e, {
+              title: 'NO SOLAR (Historical Counterfactual)',
+              badge: 'Hist Baseline',
+              formula: 'EDC Consumed × $0.24/kWh + days × $0.8546/day',
+              calculation: `${gridSpanKpis.edcRaw.toFixed(1)} × $0.24 [$${(gridSpanKpis.edcRaw * 0.24).toFixed(2)}] + ${gridSpanKpis.rowCount} × $0.8546 [$${(gridSpanKpis.rowCount * 0.8546).toFixed(2)}] = $${gridSpanKpis.costWithoutSolar}`,
+              source: 'Estimated NYSEG utility bill without rooftop solar offset',
+            })
+          }
+          onMouseLeave={hideCellDerivation}
+          className={`px-2.5 py-2 rounded-lg space-y-0.5 cursor-help transition hover:ring-1 hover:ring-[#1f7a4c]/40 ${calloutBg}`}
+        >
           <div className="flex items-center justify-between gap-1">
             <span className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>NO SOLAR</span>
             <span className="px-1 py-px rounded bg-[#1f7a4c]/12 text-[#1f7a4c] text-[9px] font-semibold">Hist</span>
@@ -1992,7 +2117,11 @@ function HeliosPulsePortalInner() {
         </div>
 
         <div className={`rounded-2xl overflow-hidden border-2 ${darkMode ? 'bg-slate-900 border-slate-500 text-slate-100' : 'bg-white border-[#4a463f] text-[#1a1917] shadow-sm'}`}>
-          <div className={`overflow-x-auto ${isPopOutModal ? 'max-h-[78vh]' : 'max-h-[70vh]'}`}>
+          <div
+            onScroll={hideCellDerivation}
+            onMouseLeave={hideCellDerivation}
+            className={`overflow-x-auto ${isPopOutModal ? 'max-h-[78vh]' : 'max-h-[70vh]'}`}
+          >
             <table className="w-full border-collapse text-xs">
               <thead className={`sticky top-0 z-20 border-b-2 ${darkMode ? 'border-slate-400 bg-slate-900 text-slate-100' : 'border-[#4a463f] bg-[#e5dfd3] text-[#1a1917]'}`}>
                 <tr>
@@ -2194,6 +2323,11 @@ function HeliosPulsePortalInner() {
                   const solarText = darkMode ? 'text-amber-200' : 'text-[#9a3412]';
                   const subText = darkMode ? 'text-slate-200/80' : 'text-[#374151]';
 
+                  const tempBadge = row.isTempPlaceholder ? `Temp · Copied from ${row.tempSourceDate}` : 'Reconciled Row';
+                  const nysegSourceText = row.isTempPlaceholder
+                    ? `Temporary copy of ${row.tempSourceDate} NYSEG intervals (actual intervals pending)`
+                    : `NYSEG_Daily_Usage_Data.csv (${row.nysegHours || 24} hourly intervals)`;
+
                   return (
                     <tr
                       key={row.date}
@@ -2201,7 +2335,20 @@ function HeliosPulsePortalInner() {
                       aria-selected={isSelected}
                       className={`${rowBgClass} border-b-2 ${sheetGridBorder} cursor-pointer transition-colors`}
                     >
-                      <td className={`p-2.5 font-mono font-semibold whitespace-nowrap border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Date · ${row.date}`,
+                            badge: tempBadge,
+                            formula: 'Daily reconciliation index (YYYY-MM-DD, America/New_York)',
+                            calculation: row.isTempPlaceholder
+                              ? `${row.date}: SunRun recorded ${row.solar_kwh.toFixed(3)} kWh; NYSEG values copied temporarily from ${row.tempSourceDate}`
+                              : `${row.date}: Matched SunRun daily production with ${row.nysegHours || 24} hourly NYSEG smart-meter intervals`,
+                            source: row.note || nysegSourceText,
+                          })
+                        }
+                        className={`p-2.5 font-mono font-semibold whitespace-nowrap border-r-2 ${sheetGridBorder}`}
+                      >
                         <div>{row.date}</div>
                         {row.isTempPlaceholder && (
                           <span
@@ -2216,49 +2363,161 @@ function HeliosPulsePortalInner() {
                           </span>
                         )}
                       </td>
-                      <td className={`p-2.5 text-center font-semibold border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Day of Week · ${row.date}`,
+                            badge: 'Calendar',
+                            formula: 'UTC weekday name derived from Date (T12:00:00Z)',
+                            calculation: `${row.date} → ${row.dayName}`,
+                            source: 'Computed from Date column',
+                          })
+                        }
+                        className={`p-2.5 text-center font-semibold border-r-2 ${sheetGridBorder}`}
+                      >
                         {row.dayName}
                       </td>
-                      <td className={`p-2 text-right border-r-2 ${sheetGridBorder} leading-tight whitespace-nowrap`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Weather & Temperature · ${row.date}`,
+                            badge: 'Weather',
+                            formula: 'Daily min/max °F + sky condition from Open-Meteo / NYSEG hourly temps',
+                            calculation: `High ${row.tempHigh}°F / Low ${row.tempLow}°F · Condition: ${row.weatherCond}`,
+                            source: 'Open-Meteo daily forecast/history & NYSEG hourly ambient temps',
+                          })
+                        }
+                        className={`p-2 text-right border-r-2 ${sheetGridBorder} leading-tight whitespace-nowrap`}
+                      >
                         <div className="font-mono font-semibold">
                           {row.tempHigh}° / {row.tempLow}°F
                         </div>
                         <div className={`text-[10px] font-medium ${subText}`}>{row.weatherCond}</div>
                       </td>
-                      <td className={`p-2.5 text-right font-mono font-medium border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Daily Irradiance · ${row.date}`,
+                            badge: `${row.irradianceNum} W/m²`,
+                            formula: 'Daily peak instantaneous global horizontal irradiance (shortwave_radiation_instant)',
+                            calculation: `Peak GHI = ${row.irradianceNum} W/m² (${row.weatherCond})`,
+                            source: row.irradianceOrigin || 'Open-Meteo peak irradiance archive',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-medium border-r-2 ${sheetGridBorder}`}
+                      >
                         {row.irradianceNum}
                       </td>
-                      <td className={`p-2.5 text-right font-mono font-medium border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Peak Sun Height · ${row.date}`,
+                            badge: row.sunHeight,
+                            formula: 'Solar Noon Elevation = 90° − Latitude (41.32°) + Declination δ',
+                            calculation: row.sunHeightFormula || `Yorktown Heights noon solar angle = ${row.sunHeight}`,
+                            source: 'NOAA solar declination equation for 41.32°N',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-medium border-r-2 ${sheetGridBorder} whitespace-nowrap`}
+                      >
                         {row.sunHeight}
                       </td>
 
                       {/* SUNRUN POWER */}
-                      <td className={`p-2.5 text-right font-mono font-bold ${solarText} border-x-2 border-[#c25e00]`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `SunRun Power · ${row.date}`,
+                            badge: 'Measured CSV',
+                            formula: 'Direct daily inverter production total (display rounded to 0.1 kWh)',
+                            calculation: `Recorded = ${row.solar_kwh.toFixed(3)} kWh → displayed ${row.solar_kwh.toFixed(1)} kWh`,
+                            source: `Sunrun_Daily_Production_Data.csv${row.eod_meter_kwh ? ` (EOD meter ${row.eod_meter_kwh.toFixed(3)} kWh)` : ''}`,
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-bold ${solarText} border-x-2 border-[#c25e00]`}
+                      >
                         {row.solar_kwh.toFixed(1)}
                       </td>
 
                       {/* DELIVERED / M01 */}
-                      <td className="p-2.5 text-right font-mono font-bold border-x-2 border-[#475569]">
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Delivered / M01 · ${row.date}`,
+                            badge: row.isTempPlaceholder ? 'Temp Copy' : 'Measured CSV',
+                            formula: 'Σ Hourly grid import delivered to home (M01)',
+                            calculation: `Recorded = ${row.m01_import_kwh.toFixed(3)} kWh → displayed ${row.m01_import_kwh.toFixed(1)} kWh`,
+                            source: nysegSourceText,
+                          })
+                        }
+                        className="p-2.5 text-right font-mono font-bold border-x-2 border-[#475569]"
+                      >
                         {row.m01_import_kwh.toFixed(1)}
                       </td>
 
                       {/* RUNNING M01 */}
-                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Running M01 · ${row.date}`,
+                            badge: row.isTempPlaceholder ? 'Temp Excluded' : 'Cumulative',
+                            formula: 'Cumulative sum of reconciled Delivered / M01 through this date',
+                            calculation: row.isTempPlaceholder
+                              ? `Temp placeholder excluded from running total → held at ${row.running_m01.toFixed(1)} kWh`
+                              : `Previous Running M01 (${(row.running_m01 - row.m01_import_kwh).toFixed(1)}) + ${row.m01_import_kwh.toFixed(1)} = ${row.running_m01.toFixed(1)} kWh`,
+                            source: 'Chronological cumulative total across reconciled NYSEG days',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}
+                      >
                         {row.running_m01.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                       </td>
 
                       {/* RECEIVED / M02 */}
-                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-x-2 border-[#15803d]`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Received / M02 · ${row.date}`,
+                            badge: row.isTempPlaceholder ? 'Temp Copy' : 'Measured CSV',
+                            formula: 'Σ Hourly solar surplus exported to NYSEG grid (M02)',
+                            calculation: `Recorded = ${row.m02_export_kwh.toFixed(3)} kWh → displayed ${row.m02_export_kwh.toFixed(1)} kWh`,
+                            source: nysegSourceText,
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-bold ${greenText} border-x-2 border-[#15803d]`}
+                      >
                         {row.m02_export_kwh.toFixed(1)}
                       </td>
 
                       {/* RUNNING M02 */}
-                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Running M02 · ${row.date}`,
+                            badge: row.isTempPlaceholder ? 'Temp Excluded' : 'Cumulative',
+                            formula: 'Cumulative sum of reconciled Received / M02 through this date',
+                            calculation: row.isTempPlaceholder
+                              ? `Temp placeholder excluded from running total → held at ${row.running_m02.toFixed(1)} kWh`
+                              : `Previous Running M02 (${(row.running_m02 - row.m02_export_kwh).toFixed(1)}) + ${row.m02_export_kwh.toFixed(1)} = ${row.running_m02.toFixed(1)} kWh`,
+                            source: 'Chronological cumulative total across reconciled NYSEG days',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}
+                      >
                         {row.running_m02.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                       </td>
 
                       {/* M01 - M02 DIFF (NET) */}
                       <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `M01 − M02 Diff (Net Grid Flow) · ${row.date}`,
+                            badge: row.m01_m02_diff >= 0 ? 'Net Import' : 'Net Export',
+                            formula: 'Delivered (M01) − Received (M02)',
+                            calculation: `${row.m01_import_kwh.toFixed(3)} − ${row.m02_export_kwh.toFixed(3)} = ${row.m01_m02_diff >= 0 ? '+' : ''}${row.m01_m02_diff.toFixed(3)} kWh (${row.m01_m02_diff >= 0 ? 'net import' : 'net credit added'})`,
+                            source: nysegSourceText,
+                          })
+                        }
                         className={`p-2.5 text-right font-mono font-bold border-r-2 ${sheetGridBorder} ${
                           row.m01_m02_diff >= 0 ? redText : greenText
                         }`}
@@ -2267,27 +2526,82 @@ function HeliosPulsePortalInner() {
                       </td>
 
                       {/* EDC */}
-                      <td className="p-2.5 text-right font-mono font-bold border-x-2 border-[#9a3412]">
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `EDC (Estimated Daily Consumption) · ${row.date}`,
+                            badge: 'Derived Energy',
+                            formula: 'SunRun Power + Delivered (M01) − Received (M02)',
+                            calculation: `${row.solar_kwh.toFixed(3)} + ${row.m01_import_kwh.toFixed(3)} − ${row.m02_export_kwh.toFixed(3)} = ${row.edc_kwh.toFixed(3)} kWh → ${row.edc_kwh.toFixed(1)} kWh`,
+                            source: 'Energy balance equation (generation + grid import − grid export)',
+                          })
+                        }
+                        className="p-2.5 text-right font-mono font-bold border-x-2 border-[#9a3412]"
+                      >
                         {row.edc_kwh.toFixed(1)}
                       </td>
 
                       {/* RUNNING EDC */}
-                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Running EDC · ${row.date}`,
+                            badge: row.isTempPlaceholder ? 'Temp Excluded' : 'Cumulative',
+                            formula: 'Cumulative sum of reconciled daily EDC through this date',
+                            calculation: row.isTempPlaceholder
+                              ? `Temp placeholder excluded from running total → held at ${row.running_edc.toFixed(1)} kWh`
+                              : `Previous Running EDC (${(row.running_edc - row.edc_kwh).toFixed(1)}) + ${row.edc_kwh.toFixed(1)} = ${row.running_edc.toFixed(1)} kWh`,
+                            source: 'Chronological cumulative home consumption across reconciled days',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder}`}
+                      >
                         {row.running_edc.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                       </td>
 
                       {/* IMPORT COST */}
-                      <td className={`p-2.5 text-right font-mono font-semibold ${redText} border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Import Cost · ${row.date}`,
+                            badge: '@ $0.24/kWh',
+                            formula: 'Delivered (M01) × $0.24/kWh',
+                            calculation: `${row.m01_import_kwh.toFixed(3)} kWh × $0.24 = $${row.import_cost.toFixed(2)}`,
+                            source: 'Configured NYSEG blended volumetric rate ($0.24/kWh)',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-semibold ${redText} border-r-2 ${sheetGridBorder}`}
+                      >
                         ${row.import_cost.toFixed(2)}
                       </td>
 
                       {/* EXPORT VALUE */}
-                      <td className={`p-2.5 text-right font-mono font-semibold ${greenText} border-r-2 ${sheetGridBorder}`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Export Value · ${row.date}`,
+                            badge: '@ $0.24/kWh',
+                            formula: 'Received (M02) × $0.24/kWh',
+                            calculation: `${row.m02_export_kwh.toFixed(3)} kWh × $0.24 = $${row.export_value.toFixed(2)}`,
+                            source: 'Configured NYSEG net-metering credit value ($0.24/kWh)',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-semibold ${greenText} border-r-2 ${sheetGridBorder}`}
+                      >
                         ${row.export_value.toFixed(2)}
                       </td>
 
                       {/* NET COST */}
                       <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Net Cost · ${row.date}`,
+                            badge: row.net_cost >= 0 ? 'Net Charge' : 'Net Credit',
+                            formula: '(M01 − M02) × $0.24/kWh',
+                            calculation: `(${row.m01_import_kwh.toFixed(3)} − ${row.m02_export_kwh.toFixed(3)}) × $0.24 = ${row.net_cost >= 0 ? '+' : ''}$${row.net_cost.toFixed(2)}`,
+                            source: 'Import Cost minus Export Value at $0.24/kWh',
+                          })
+                        }
                         className={`p-2.5 text-right font-mono font-bold border-r-2 ${sheetGridBorder} ${
                           row.net_cost >= 0 ? redText : greenText
                         }`}
@@ -2296,12 +2610,35 @@ function HeliosPulsePortalInner() {
                       </td>
 
                       {/* RUNNING NET COST */}
-                      <td className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder} whitespace-nowrap`}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Running Net Cost · ${row.date}`,
+                            badge: 'Cumulative',
+                            formula: '(Running M01 − Running M02) × $0.24/kWh',
+                            calculation: `(${row.running_m01.toFixed(1)} − ${row.running_m02.toFixed(1)}) × $0.24 = $${row.running_net_cost.toFixed(2)}`,
+                            source: 'Cumulative net energy credit/charge balance through this date',
+                          })
+                        }
+                        className={`p-2.5 text-right font-mono font-bold ${greenText} border-r-2 ${sheetGridBorder} whitespace-nowrap`}
+                      >
                         ${row.running_net_cost.toFixed(2)}
                       </td>
 
                       {/* NOTES */}
-                      <td className="p-1.5" onClick={(e) => e.stopPropagation()}>
+                      <td
+                        onMouseEnter={(e) =>
+                          showCellDerivation(e, {
+                            title: `Row Note · ${row.date}`,
+                            badge: row.status,
+                            formula: 'Pipeline reconciliation status or custom user note',
+                            calculation: gridNotes[row.date] ?? row.note ?? 'No custom note recorded',
+                            source: nysegSourceText,
+                          })
+                        }
+                        className="p-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="text"
                           placeholder="Add note"
@@ -4353,12 +4690,68 @@ function HeliosPulsePortalInner() {
 
       {/* POP OUT FULL-SCREEN INTERVAL DATA GRID MODAL */}
       {gridPopOut && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-          <div className={`w-full max-w-[96vw] max-h-[94vh] overflow-y-auto rounded-2xl p-5 sm:p-7 shadow-2xl ${pageBg}`}>
+        <div
+          onScroll={hideCellDerivation}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6"
+        >
+          <div
+            onScroll={hideCellDerivation}
+            className={`w-full max-w-[96vw] max-h-[94vh] overflow-y-auto rounded-2xl p-5 sm:p-7 shadow-2xl ${pageBg}`}
+          >
             {renderIntervalDataGrid(true)}
           </div>
         </div>
       )}
+
+      {/* CELL & KPI DERIVATION HOVER POPUP */}
+      {hoveredDerivation && typeof window !== 'undefined' && (() => {
+        const popW = 340;
+        const left = Math.min(
+          Math.max(12, hoveredDerivation.rect.left),
+          Math.max(12, window.innerWidth - popW - 12)
+        );
+        const placeAbove = hoveredDerivation.rect.bottom + 175 > window.innerHeight && hoveredDerivation.rect.top > 175;
+        const top = placeAbove
+          ? Math.max(12, hoveredDerivation.rect.top - 8)
+          : Math.min(window.innerHeight - 16, hoveredDerivation.rect.bottom + 8);
+
+        return (
+          <div
+            style={{
+              left: `${left}px`,
+              top: `${top}px`,
+              transform: placeAbove ? 'translateY(-100%)' : 'none',
+            }}
+            className={`fixed z-[80] pointer-events-none w-[340px] max-w-[calc(100vw-24px)] rounded-xl border p-3 shadow-xl backdrop-blur-md space-y-1.5 ${
+              darkMode
+                ? 'bg-slate-950/95 border-slate-600 text-slate-100'
+                : 'bg-[#ffffff]/96 border-[#4a463f]/40 text-[#1a1917]'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-xs font-bold leading-snug">{hoveredDerivation.title}</div>
+              {hoveredDerivation.badge && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#1f7a4c]/12 text-[#1f7a4c] shrink-0">
+                  {hoveredDerivation.badge}
+                </span>
+              )}
+            </div>
+            <div
+              className={`rounded-lg px-2 py-1 text-[11px] font-mono leading-snug ${
+                darkMode ? 'bg-slate-900 text-amber-200 border border-slate-800' : 'bg-[#faf8f4] text-[#9a3412] border border-[#e6e2d8]'
+              }`}
+            >
+              {hoveredDerivation.formula}
+            </div>
+            <div className="text-[11px] font-mono leading-snug break-words">
+              {hoveredDerivation.calculation}
+            </div>
+            <div className={`text-[10px] leading-snug pt-0.5 border-t ${dividerBorder} ${mutedText}`}>
+              Source: {hoveredDerivation.source}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ROW CALCULATION AUDIT MODAL */}
       {selectedAuditRow && (
