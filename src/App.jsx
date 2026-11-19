@@ -1686,28 +1686,28 @@ function HeliosPulsePortalInner() {
 
   // Reusable renderer for the Interval Data Grid styled with the Solar Savings standard palette & fonts
   const renderIntervalDataGrid = (isPopOutModal = false) => (
-    <div className="space-y-6">
-      {/* EDITORIAL HEADER + TOOLBAR */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2 max-w-2xl">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+    <div className="space-y-2.5">
+      {/* COMPACT HEADER + TOOLBAR */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight">
             Reconciled daily interval & cost grid
           </h1>
-          <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
-            Each row totals the day&apos;s intervals across your Sunrun production and NYSEG smart meter registers. Dollar amounts use the configured <strong className="font-semibold">$0.24/kWh</strong> rate.
-          </p>
+          <span className={`text-xs ${mutedText}`}>
+            Daily register totals @ <strong className="font-semibold">$0.24/kWh</strong>
+          </span>
         </div>
 
         {/* TOP BAR: ROW COUNT, VIEW SELECTOR, PERIOD PAGER, DOWNLOAD CSV, POP OUT */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-mono font-bold text-[#1f7a4c]">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-mono font-bold text-[#1f7a4c] mr-1">
             {visibleGridRows.length} of {fullIntervalGridRows.length} rows
           </span>
 
           {selectedGridRows.length > 0 && (
             <button
               onClick={() => setSelectedGridRows([])}
-              className={`px-2.5 py-1 rounded-full font-semibold border cursor-pointer transition ${
+              className={`px-2 py-0.5 rounded-full font-semibold border cursor-pointer transition ${
                 darkMode
                   ? 'bg-purple-700 text-white border-purple-400 hover:bg-purple-600'
                   : 'bg-[#d8b4fe] text-[#1a1917] border-[#7e22ce] hover:bg-[#c084fc]'
@@ -1718,7 +1718,7 @@ function HeliosPulsePortalInner() {
             </button>
           )}
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className={`font-medium ${mutedText}`}>View</span>
             <select
               value={gridViewMode}
@@ -1726,7 +1726,7 @@ function HeliosPulsePortalInner() {
                 setGridViewMode(e.target.value);
                 setGridCursorIndex(0);
               }}
-              className={`px-3 py-1.5 rounded-full border font-semibold cursor-pointer ${pillBtnSecondary}`}
+              className={`px-2.5 py-1 rounded-full border font-semibold cursor-pointer ${pillBtnSecondary}`}
             >
               <option value="Weekly">Weekly</option>
               <option value="Monthly">Monthly</option>
@@ -1737,20 +1737,20 @@ function HeliosPulsePortalInner() {
           <button
             onClick={() => setGridCursorIndex((i) => Math.min(gridPeriods.length - 1, i + 1))}
             disabled={gridCursorIndex >= gridPeriods.length - 1}
-            className={`w-7 h-7 rounded-full border flex items-center justify-center disabled:opacity-40 cursor-pointer ${pillBtnSecondary}`}
+            className={`w-6 h-6 rounded-full border flex items-center justify-center disabled:opacity-40 cursor-pointer ${pillBtnSecondary}`}
             title="Previous period"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
 
-          <span className="min-w-[120px] text-center font-bold text-sm">
+          <span className="min-w-[105px] text-center font-bold text-xs sm:text-sm">
             {activeGridPeriod.label}
           </span>
 
           <button
             onClick={() => setGridCursorIndex((i) => Math.max(0, i - 1))}
             disabled={gridCursorIndex <= 0}
-            className={`w-7 h-7 rounded-full border flex items-center justify-center disabled:opacity-40 cursor-pointer ${pillBtnSecondary}`}
+            className={`w-6 h-6 rounded-full border flex items-center justify-center disabled:opacity-40 cursor-pointer ${pillBtnSecondary}`}
             title="Next period"
           >
             <ChevronRight className="w-3.5 h-3.5" />
@@ -1758,20 +1758,20 @@ function HeliosPulsePortalInner() {
 
           <button
             onClick={handleDownloadIntervalGridCsv}
-            className={`px-3.5 py-1.5 rounded-full border font-semibold transition cursor-pointer ${pillBtnSecondary}`}
+            className={`px-3 py-1 rounded-full border font-semibold transition cursor-pointer ${pillBtnSecondary}`}
           >
             Download CSV
           </button>
 
           <button
             onClick={() => setGridPopOut(!isPopOutModal)}
-            className={`px-3.5 py-1.5 rounded-full border font-semibold transition cursor-pointer flex items-center gap-1 ${
+            className={`px-3 py-1 rounded-full border font-semibold transition cursor-pointer flex items-center gap-1 ${
               isPopOutModal ? 'bg-[#1a1917] text-white border-[#1a1917]' : pillBtnSecondary
             }`}
           >
             {isPopOutModal ? (
               <>
-                <Minimize2 className="w-3.5 h-3.5" /> Close Pop Out
+                <Minimize2 className="w-3.5 h-3.5" /> Close
               </>
             ) : (
               'Pop Out'
@@ -1780,71 +1780,69 @@ function HeliosPulsePortalInner() {
         </div>
       </div>
 
-      {/* TEMPORARY NYSEG RECORDS NOTICE BANNER IN WARM CALLOUT STYLE */}
-      <div className={`p-4 rounded-xl text-xs sm:text-[13px] leading-relaxed ${calloutBg}`}>
+      {/* SLIM TEMPORARY NYSEG RECORDS NOTICE BAR */}
+      <div className={`px-3 py-1.5 rounded-lg text-[11px] leading-snug ${calloutBg}`}>
         <strong className="font-semibold">Temporary NYSEG records:</strong>{' '}
         <span className={mutedText}>
-          October 29 and 30 are display-only copies of October 31, and November 13 is a display-only copy of November 12 while NYSEG has no hourly intervals for those dates. They are excluded from official reconciliation, credit-bank, and forecast calculations; visible grid-span totals include the placeholders.
+          Oct 29 &amp; 30 (from Oct 31) and Nov 13 (from Nov 12) are display-only while NYSEG intervals are pending — excluded from official reconciliation, credit-bank &amp; forecast, included in visible span totals.
         </span>
       </div>
 
-      {/* 7 SUMMARY KPI CARDS USING CALLOUT STANDARD */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
-        <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-          <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>POWER</div>
-          <div className="text-lg font-bold font-mono text-[#e07a16]">{gridSpanKpis.power} kWh</div>
+      {/* COMPACT 7-CARD KPI RIBBON */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+          <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>POWER</div>
+          <div className="text-sm font-bold font-mono text-[#e07a16]">{gridSpanKpis.power} kWh</div>
         </div>
 
-        <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-          <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>M01 DELIVERED</div>
-          <div className="text-lg font-bold font-mono">{gridSpanKpis.m01} kWh</div>
+        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+          <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>M01 DELIVERED</div>
+          <div className="text-sm font-bold font-mono">{gridSpanKpis.m01} kWh</div>
         </div>
 
-        <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-          <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>M02 RECEIVED</div>
-          <div className="text-lg font-bold font-mono text-[#1f7a4c]">{gridSpanKpis.m02} kWh</div>
+        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+          <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>M02 RECEIVED</div>
+          <div className="text-sm font-bold font-mono text-[#1f7a4c]">{gridSpanKpis.m02} kWh</div>
         </div>
 
-        <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-          <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>EDC CONSUMED</div>
-          <div className="text-lg font-bold font-mono">{gridSpanKpis.edc} kWh</div>
+        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+          <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>EDC CONSUMED</div>
+          <div className="text-sm font-bold font-mono">{gridSpanKpis.edc} kWh</div>
         </div>
 
-        <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-          <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>NET EXPORT</div>
-          <div className="text-lg font-bold font-mono text-[#1f7a4c]">{gridSpanKpis.netExport} kWh</div>
+        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+          <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>NET EXPORT</div>
+          <div className="text-sm font-bold font-mono text-[#1f7a4c]">{gridSpanKpis.netExport} kWh</div>
         </div>
 
-        <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-          <div className={`text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>COST WITH SOLAR</div>
-          <div className="text-lg font-bold font-mono">${gridSpanKpis.costWithSolar}</div>
+        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+          <div className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>COST W/ SOLAR</div>
+          <div className="text-sm font-bold font-mono">${gridSpanKpis.costWithSolar}</div>
         </div>
 
-        <div className={`p-4 rounded-xl space-y-1 ${calloutBg}`}>
-          <div className={`text-[10px] font-semibold uppercase tracking-wider leading-tight ${mutedText}`}>
-            WITHOUT SOLAR
+        <div className={`px-2.5 py-2 rounded-lg space-y-0.5 ${calloutBg}`}>
+          <div className="flex items-center justify-between gap-1">
+            <span className={`text-[9.5px] font-semibold uppercase tracking-wider ${mutedText}`}>NO SOLAR</span>
+            <span className="px-1 py-px rounded bg-[#1f7a4c]/12 text-[#1f7a4c] text-[9px] font-semibold">Hist</span>
           </div>
-          <div className="inline-block px-1.5 py-0.5 rounded bg-[#1f7a4c]/12 text-[#1f7a4c] text-[10px] font-semibold">
-            Historical Usage
-          </div>
-          <div className="text-lg font-bold font-mono">${gridSpanKpis.costWithoutSolar}</div>
+          <div className="text-sm font-bold font-mono">${gridSpanKpis.costWithoutSolar}</div>
         </div>
       </div>
 
       {/* 18-COLUMN SPREADSHEET DATA GRID */}
-      <div className="space-y-2.5">
+      <div className="space-y-1.5">
         <div className={`flex flex-wrap items-center justify-between gap-2 text-[11px] font-medium ${mutedText}`}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded border border-[#15803d] bg-[#86efac] inline-block" />
+              <span className="w-3 h-3 rounded border border-[#15803d] bg-[#86efac] inline-block" />
               M02 − M01 &gt; 0 (Net Export)
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded border border-[#a16207] bg-[#fde047] inline-block" />
+              <span className="w-3 h-3 rounded border border-[#a16207] bg-[#fde047] inline-block" />
               M02 − M01 ≤ 0 (Net Import)
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded border border-[#7e22ce] bg-[#c084fc] inline-block" />
+              <span className="w-3 h-3 rounded border border-[#7e22ce] bg-[#c084fc] inline-block" />
               Selected Row (click any row to toggle)
             </span>
           </div>
@@ -1856,7 +1854,7 @@ function HeliosPulsePortalInner() {
         </div>
 
         <div className={`rounded-2xl overflow-hidden border-2 ${darkMode ? 'bg-slate-900 border-slate-500 text-slate-100' : 'bg-white border-[#4a463f] text-[#1a1917] shadow-sm'}`}>
-          <div className={`overflow-x-auto ${isPopOutModal ? 'max-h-[70vh]' : 'max-h-[600px]'}`}>
+          <div className={`overflow-x-auto ${isPopOutModal ? 'max-h-[78vh]' : 'max-h-[70vh]'}`}>
             <table className="w-full border-collapse text-xs">
               <thead className={`sticky top-0 z-20 border-b-2 ${darkMode ? 'border-slate-400 bg-slate-900 text-slate-100' : 'border-[#4a463f] bg-[#e5dfd3] text-[#1a1917]'}`}>
                 <tr>
@@ -2224,7 +2222,7 @@ function HeliosPulsePortalInner() {
         </aside>
 
         {/* CENTER CONTENT COLUMN */}
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-4">
           {/* TOP MENU BAR WITH PILL BUTTONS */}
           <header className={`sticky top-0 z-30 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
             <div className="px-4 sm:px-6 pt-3.5 pb-3 flex flex-wrap items-center justify-between gap-3">
