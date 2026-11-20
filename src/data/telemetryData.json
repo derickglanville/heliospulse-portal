@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-19T16:01:27.188Z",
+    "generated_at": "2026-11-20T12:30:51.256Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -23,7 +23,7 @@
     "cumulative_net_credit_bank_kwh": 1511.185
   },
   "task_scheduler": {
-    "checkedAt": "2026-11-19 11:01:27",
+    "checkedAt": "2026-11-20 07:30:51",
     "action": "status",
     "target": "both",
     "runResults": [],
@@ -34,39 +34,38 @@
         "taskName": "Sunrun Daily Download and Copy",
         "schedule": "Daily at 7:29 AM",
         "state": "Ready",
-        "lastRunTime": "2026-11-19 10:42:02",
+        "lastRunTime": "2026-11-20 06:40:01",
         "lastTaskResult": 1,
-        "nextRunTime": "2026-11-20 06:40:00",
+        "nextRunTime": "2026-11-21 06:40:00",
         "command": "\"C:\\Program Files\\Python38\\python.exe\" \"C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\run_sunrun_daily.py\" --run",
         "queryError": null,
         "logInfo": {
-          "logFile": "sunrun_workflow_2026-11-19.log",
-          "updatedAt": "2026-11-19 10:42:43",
-          "summary": "[2026-11-19 10:42:43] Email report sent successfully.",
+          "logFile": "sunrun_workflow_2026-11-20.log",
+          "updatedAt": "2026-11-20 06:43:36",
+          "summary": "[2026-11-20 06:43:36] Email report sent successfully.",
           "recentSteps": [
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:28] Checking the saved Sunrun session.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:35] Saved session is no longer valid.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:35] Opening the Sunrun login page.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:35] Waiting for the mobile-number sign-in button.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:37] Clicked 'Sign In with Mobile Number'.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:37] Waiting for the phone-number field.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:38] Entered the phone number.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:38] Requested the verification code.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py: [10:42:41] Browser closed.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py ERROR:",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py ERROR: Sunrun download failed during: login",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py ERROR: Reason: The saved Sunrun session has expired and a new SMS verification code is required. Run the script with --show to refresh the session.",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py ERROR:",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py ERROR: Screenshot: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\diagnostics\\20261119_104238_login.png",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py ERROR: HTML snapshot: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\diagnostics\\20261119_104238_login.html",
-            "[2026-11-19 10:42:41] sunrun_download_v7.py ERROR: Current page: https://my.sunrun.com/login-phone",
-            "[2026-11-19 10:42:41] WORKFLOW FAILED: sunrun_download_v7.py failed with exit code 1.",
-            "[2026-11-19 10:42:41] HTML report saved: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\Report\\Sunrun_Report_2026-11-19_104241.html",
-            "[2026-11-19 10:42:43] Email report sent successfully.",
-            "[2026-11-19 10:42:43] Daily load history updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Daily_Load_History.json"
+            "[2026-11-20 06:40:03] Starting: sunrun_download_v7.py",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:40:06] Launching Chromium.",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:40:10] Checking the saved Sunrun session.",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:40:11] Saved session is valid.",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:40:11] Opening the Sunrun home page.",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:40:11] Opening the History page (visit 1/2).",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:41:52] History controls have not rendered yet; reloading the History page once.",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:41:52] Opening the History page (visit 2/2).",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py: [06:43:34] Browser closed.",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py ERROR:",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py ERROR: Sunrun download failed during: download",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py ERROR: Reason: The History page opened, but its production controls were not found after a reload.",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py ERROR:",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py ERROR: Screenshot: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\diagnostics\\20261120_064333_download.png",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py ERROR: HTML snapshot: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\diagnostics\\20261120_064333_download.html",
+            "[2026-11-20 06:43:34] sunrun_download_v7.py ERROR: Current page: https://my.sunrun.com/login",
+            "[2026-11-20 06:43:34] WORKFLOW FAILED: sunrun_download_v7.py failed with exit code 1.",
+            "[2026-11-20 06:43:34] HTML report saved: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\Report\\Sunrun_Report_2026-11-20_064334.html",
+            "[2026-11-20 06:43:36] Email report sent successfully.",
+            "[2026-11-20 06:43:36] Daily load history updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Daily_Load_History.json"
           ]
-        },
-        "liveQueryNote": "Exception calling \"ProcessRecord\" with \"1\" argument(s): \"Access to a CIM resource was not available to the client.\""
+        }
       },
       {
         "key": "nyseg",
@@ -74,26 +73,19 @@
         "taskName": "Solar Energy Tracker - NYSEG Daily Sync",
         "schedule": "Daily at 7:30 AM",
         "state": "Ready",
-        "lastRunTime": "2026-11-19 10:49:59",
-        "lastTaskResult": null,
-        "nextRunTime": null,
+        "lastRunTime": "2026-11-20 06:30:01",
+        "lastTaskResult": 1,
+        "nextRunTime": "2026-11-21 06:30:00",
         "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\NYSEG Download Script\\run_nyseg_daily_sync.ps1\"",
-        "queryError": "Cannot convert value \"3221225786\" to type \"System.Int32\". Error: \"Value was either too large or too small for an Int32.\"",
+        "queryError": null,
         "logInfo": {
           "logFile": "nyseg-daily-sync.log",
-          "updatedAt": "2026-11-19 10:51:47",
-          "summary": "[nyseg] No open page left to capture - the browser closed unexpectedly.",
+          "updatedAt": "2026-11-20 07:30:11",
+          "summary": "[2026-11-20T07:30:11] NYSEG 7:30 AM workflow failed after 4 attempts over one hour",
           "recentSteps": [
-            "[2026-11-19T10:50:02] Starting NYSEG 7:30 AM workflow",
-            "Attempt 1/4: Running the proven NYSEG_File_Download_Test.py download",
-            "Step 1/2: Downloading the NYSEG CSV with NYSEG_File_Download_Test.py…",
-            "[nyseg] Attempt 1 of 3",
-            "[nyseg] Step 1/6: Opened NYSEG Insights: https://uplight-external-prd.us.auth0.com/v2/logout?federated=true&returnTo=https%3A%2F%2F",
-            "[nyseg] FAILED: Page.wait_for_timeout: Target page, context or browser has been closed",
-            "[nyseg] No open page left to capture - the browser closed unexpectedly."
+            "[2026-11-20T07:30:11] NYSEG 7:30 AM workflow failed after 4 attempts over one hour"
           ]
-        },
-        "liveQueryNote": "Exception calling \"ProcessRecord\" with \"1\" argument(s): \"Access to a CIM resource was not available to the client.\""
+        }
       }
     ]
   },
@@ -123,7 +115,7 @@
   ],
   "notification_status": {
     "recipient": "dglanville@gmail.com",
-    "should_send": false,
+    "should_send": true,
     "unsent_anomaly_count": 0,
     "new_sunrun_count": 0,
     "new_nyseg_count": 0,
@@ -159,7 +151,7 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-19T16:01:27.192Z",
+    "last_checked_at": "2026-11-20T12:30:51.286Z",
     "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []
@@ -566,7 +558,7 @@
   },
   "more_bills": {
     "source_folder": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\NYSEG Bill\\Bills\\More Bills",
-    "scanned_at": "2026-11-19",
+    "scanned_at": "2026-11-20",
     "total_pdf_files": 19,
     "unique_bill_count": 19,
     "authoritative_count": 17,
@@ -1901,12 +1893,12 @@
       "m02_export_kwh": null,
       "credit_delta": null,
       "temp_f": null,
-      "temp_min_f": null,
-      "temp_max_f": null,
-      "irradiance_wm2": null,
-      "irradiance_source": null,
+      "temp_min_f": 31,
+      "temp_max_f": 63,
+      "irradiance_wm2": 504,
+      "irradiance_source": "Open-Meteo forecast/current-day data for Yorktown Heights, NY",
       "nyseg_hours": 0,
-      "irradiance": "Pending",
+      "irradiance": "Overcast",
       "status": "PENDING_TELEMETRY",
       "note": "Awaiting daily 7:30 AM telemetry sync",
       "hourly": null
