@@ -662,7 +662,7 @@ function HeliosPulsePortalInner() {
   const [aiMessages, setAiMessages] = useState([
     {
       role: 'assistant',
-      text: `Connected to your real CSV & NYSEG statement dataset: 2,210.0 kWh official NYSEG credit balance (2026-11-05 statement), -135.0 kWh unbilled net flow through 2026-11-14, and 2,075.0 kWh forecast opening balance for December 2026.`,
+      text: `Connected to your real CSV & NYSEG statement dataset (${TELEMETRY_META.reconciled_days} reconciled days through ${TELEMETRY_META.latest_reconciled_date}): ${Number(telemetryData.more_bills?.current_credit_bank_kwh ?? 2210).toLocaleString()} kWh official NYSEG credit balance (${CREDIT_BANK_FORECAST?.official_statement_date || '2026-11-05'} statement), ${Number(CREDIT_BANK_FORECAST?.unbilled_net_credit_kwh ?? 0).toFixed(1)} kWh unbilled net flow through ${CREDIT_BANK_FORECAST?.interval_file_end || TELEMETRY_META.latest_reconciled_date}, and ${Number(CREDIT_BANK_FORECAST?.opening_projected_kwh ?? 0).toFixed(1)} kWh forecast opening balance.`,
     },
   ]);
   const aiMessagesEndRef = useRef(null);
@@ -1862,18 +1862,23 @@ function HeliosPulsePortalInner() {
   const handleAskAi = (promptText) => {
     const q = (promptText || aiQuery).trim();
     if (!q) return;
-    const reply = answerSolarQuestion(q, {
-      solarRows,
-      monthlySummaries: MONTHLY_SUMMARIES,
-      moreBillsData,
-      liveCreditBankForecast,
-      combinedAlerts,
-      distDayMetrics,
-      solarTotals,
-      telemetryMeta: snapshotMeta,
-      taskSchedulerData,
-      appliances: APPLIANCES,
-    });
+    let reply = '';
+    try {
+      reply = answerSolarQuestion(q, {
+        solarRows,
+        monthlySummaries: MONTHLY_SUMMARIES,
+        moreBillsData,
+        liveCreditBankForecast,
+        combinedAlerts,
+        distDayMetrics,
+        solarTotals,
+        telemetryMeta: snapshotMeta,
+        taskSchedulerData,
+        appliances: ASSET_CATALOG,
+      });
+    } catch (err) {
+      reply = `Could not analyze that query cleanly (${err?.message || 'unexpected error'}). Try asking about a month, date, EDC, solar production, or bill summary.`;
+    }
 
     setAiMessages((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: reply }]);
     setAiQuery('');

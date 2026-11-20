@@ -217,7 +217,7 @@ function buildComparisonReply(ql, rowsChrono, monthlySummaries, moreBillsData, m
   const mentionedMonths = extractMonthsFromQuery(ql, availableMonths);
   const currentMonth = availableMonths[0] || '2026-11';
   const prevMonth = availableMonths[1] || '2026-10';
-  const sameTimeRequested = /\b(same\s*time|this\s*time|month[\s-]to[\s-]date|mtd|so\s*far|to\s*date)\b/.test(ql);
+  const sameTimeRequested = /\b(same\s*time|this\s*time|about\s+the\s+sam\w*|month[\s-]to[\s-]date|mtd|so\s*far|to\s*date)\b/.test(ql);
   const asksCurrent = /\b(current\w*|this\s+month|now|nov|latest)\b/.test(ql);
 
   let monthA = mentionedMonths[0] || currentMonth;
@@ -409,10 +409,13 @@ export function answerSolarQuestion(promptText, ctx) {
   if (metrics.irradiance === false && /\b(appliance\w*|hvac|mini[\s-]?split|ev\s+charger|water\s+heater|refrigerator|dryer|base\s*load)\b/.test(ql)) {
     if (appliances.length > 0) {
       const appSummary = appliances
-        .map((a) => `${a.name}: ${a.est_kwh_day} kWh/day ($${(a.est_kwh_day * 0.24).toFixed(2)}/day)`)
+        .map((a) =>
+          a.est_kwh_day != null
+            ? `${a.name}: ${a.est_kwh_day} kWh/day ($${(a.est_kwh_day * 0.24).toFixed(2)}/day)`
+            : `${a.name} (${a.category}): ${a.metric}`
+        )
         .join(' • ');
-      const totalApp = appliances.reduce((s, a) => s + Number(a.est_kwh_day || 0), 0);
-      return `Tracked household loads total ~${round1(totalApp)} kWh/day: ${appSummary}.`;
+      return `Tracked household systems & appliances: ${appSummary}.`;
     }
   }
 
