@@ -2901,16 +2901,16 @@ function HeliosPulsePortalInner() {
                   aria-label={mobileSectionsExpanded ? 'Collapse menu and summary sections' : 'Expand menu and summary sections'}
                   className={`min-w-0 flex-1 px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center justify-between gap-2 transition cursor-pointer ${
                     darkMode
-                      ? 'bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800'
-                      : 'bg-[#1a1917] border-[#1a1917] text-white'
+                      ? 'bg-sky-900/50 border-sky-700 text-sky-100 hover:bg-sky-800/60'
+                      : 'bg-[#dbeafe] border-[#93c5fd] text-[#1e3a8a] hover:bg-[#bfdbfe]'
                   }`}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">
                     {mobileSectionsExpanded ? <Minimize2 className="w-3.5 h-3.5 shrink-0" /> : <Menu className="w-3.5 h-3.5 shrink-0" />}
                     <span className="truncate">
                       {mobileSectionsExpanded
-                        ? 'Collapse'
-                        : `Expand · ${TOP_MENU_ITEMS.find((t) => t.id === activeTab)?.label || 'Menu'}`}
+                        ? 'Collapse Menu & kWh'
+                        : `Expand Menu & kWh · ${TOP_MENU_ITEMS.find((t) => t.id === activeTab)?.label || 'Menu'}`}
                     </span>
                   </span>
                   <ChevronDown
