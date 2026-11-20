@@ -2135,13 +2135,20 @@ function HeliosPulsePortalInner() {
         </div>
       </div>
 
-      {/* SLIM TEMPORARY NYSEG RECORDS NOTICE BAR */}
-      <div className={`px-3 py-1.5 rounded-lg text-[11px] leading-snug ${calloutBg}`}>
-        <strong className="font-semibold">Temporary NYSEG records:</strong>{' '}
-        <span className={mutedText}>
-          Oct 29 &amp; 30 (from Oct 31) and Nov 13 (from Nov 12) are display-only while NYSEG intervals are pending — excluded from official reconciliation, credit-bank &amp; forecast, included in visible span totals.
-        </span>
-      </div>
+      {/* SLIM TEMPORARY NYSEG RECORDS NOTICE BAR (shown only when placeholder rows are active) */}
+      {(() => {
+        const activeTempRows = fullIntervalGridRows.filter((r) => r.isTempPlaceholder);
+        if (activeTempRows.length === 0) return null;
+        return (
+          <div className={`px-3 py-1.5 rounded-lg text-[11px] leading-snug ${calloutBg}`}>
+            <strong className="font-semibold">Temporary NYSEG records:</strong>{' '}
+            <span className={mutedText}>
+              {activeTempRows.map((r) => `${r.date} (from ${r.tempSourceDate})`).join(', ')}{' '}
+              {activeTempRows.length === 1 ? 'is' : 'are'} display-only while NYSEG intervals are pending — excluded from official reconciliation, credit-bank &amp; forecast, included in visible span totals.
+            </span>
+          </div>
+        );
+      })()}
 
       {/* COMPACT 7-CARD KPI RIBBON */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
