@@ -208,8 +208,7 @@ class AppErrorBoundary extends React.Component {
 function HeliosPulsePortalInner() {
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('datagrid');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(true);
-  const [mobileGridSummaryOpen, setMobileGridSummaryOpen] = useState(true);
+  const [mobileSectionsExpanded, setMobileSectionsExpanded] = useState(true);
   const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
@@ -2046,40 +2045,20 @@ function HeliosPulsePortalInner() {
   // Reusable renderer for the Interval Data Grid styled with the Solar Savings standard palette & fonts
   const renderIntervalDataGrid = (isPopOutModal = false) => (
     <div className="space-y-2.5">
-      {/* COMPACT HEADER + MOBILE SUMMARY TOGGLE */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
+      {/* COMPACT HEADER + CONTROLS (CONTROLLED ON MOBILE BY SINGLE COLLAPSE BUTTON) */}
+      <div className={mobileSectionsExpanded ? 'space-y-2.5' : 'hidden lg:block lg:space-y-2.5'}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 min-w-0">
             <h1 className="text-lg sm:text-xl font-bold tracking-tight">
               Reconciled daily interval & cost grid
             </h1>
-            <span className={`hidden lg:inline text-xs ${mutedText}`}>
+            <span className={`text-xs ${mutedText}`}>
               Daily register totals @ <strong className="font-semibold">$0.24/kWh</strong>
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setMobileGridSummaryOpen((v) => !v)}
-            aria-expanded={mobileGridSummaryOpen}
-            className={`lg:hidden px-2.5 py-1 rounded-full border text-[11px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer transition ${pillBtnSecondary}`}
-          >
-            <span>{mobileGridSummaryOpen ? 'Hide Summary' : 'Show Summary'}</span>
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform duration-200 ${mobileGridSummaryOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-        </div>
-
-        {/* COLLAPSIBLE CONTROLS + 7-CARD KPI RIBBON ON MOBILE (ALWAYS SHOWN ON LG+) */}
-        <div className={mobileGridSummaryOpen ? 'space-y-2.5' : 'hidden lg:block lg:space-y-2.5'}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className={`lg:hidden text-xs ${mutedText}`}>
-              Daily register totals @ <strong className="font-semibold">$0.24/kWh</strong>
-            </span>
-
-            {/* TOP BAR: ROW COUNT, VIEW SELECTOR, PERIOD PAGER, DOWNLOAD CSV, POP OUT */}
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          {/* TOP BAR: ROW COUNT, VIEW SELECTOR, PERIOD PAGER, DOWNLOAD CSV, POP OUT */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="font-mono font-bold text-[#1f7a4c] mr-1">
             {visibleGridRows.length} of {fullIntervalGridRows.length} rows
           </span>
@@ -2302,7 +2281,6 @@ function HeliosPulsePortalInner() {
           <div className="text-sm font-bold font-mono">${gridSpanKpis.costWithoutSolar}</div>
         </div>
       </div>
-        </div>
       </div>
 
       {/* 18-COLUMN SPREADSHEET DATA GRID */}
@@ -2911,16 +2889,16 @@ function HeliosPulsePortalInner() {
 
         {/* CENTER CONTENT COLUMN */}
         <div className="min-w-0 space-y-4">
-          {/* TOP MENU BAR WITH COLLAPSIBLE MOBILE NAVIGATION */}
-          <header className={`sticky top-0 z-30 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
+          {/* TOP MENU BAR WITH SINGLE COLLAPSIBLE MOBILE CONTROL FOR MENU & SUMMARY */}
+          <header className={`${mobileSectionsExpanded ? 'relative lg:sticky lg:top-0' : 'sticky top-0'} z-30 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
             <div className="px-3 py-2.5 lg:px-6 lg:pt-3.5 lg:pb-3 space-y-2 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3">
-              {/* MOBILE / TABLET COMPACT BAR + MENU TOGGLE */}
+              {/* MOBILE / TABLET SINGLE COLLAPSE-ALL CONTROL ROW */}
               <div className="flex lg:hidden items-center justify-between gap-2">
                 <button
                   type="button"
-                  onClick={() => setMobileMenuOpen((v) => !v)}
-                  aria-expanded={mobileMenuOpen}
-                  aria-label={mobileMenuOpen ? 'Collapse navigation menu' : 'Expand navigation menu'}
+                  onClick={() => setMobileSectionsExpanded((v) => !v)}
+                  aria-expanded={mobileSectionsExpanded}
+                  aria-label={mobileSectionsExpanded ? 'Collapse menu and summary sections' : 'Expand menu and summary sections'}
                   className={`min-w-0 flex-1 px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center justify-between gap-2 transition cursor-pointer ${
                     darkMode
                       ? 'bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800'
@@ -2928,15 +2906,15 @@ function HeliosPulsePortalInner() {
                   }`}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">
-                    {mobileMenuOpen ? <X className="w-3.5 h-3.5 shrink-0" /> : <Menu className="w-3.5 h-3.5 shrink-0" />}
+                    {mobileSectionsExpanded ? <Minimize2 className="w-3.5 h-3.5 shrink-0" /> : <Menu className="w-3.5 h-3.5 shrink-0" />}
                     <span className="truncate">
-                      {mobileMenuOpen
-                        ? 'Collapse Menu'
-                        : `Menu · ${TOP_MENU_ITEMS.find((t) => t.id === activeTab)?.label || 'Tabs'}`}
+                      {mobileSectionsExpanded
+                        ? 'Collapse'
+                        : `Expand · ${TOP_MENU_ITEMS.find((t) => t.id === activeTab)?.label || 'Menu'}`}
                     </span>
                   </span>
                   <ChevronDown
-                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${mobileMenuOpen ? 'rotate-180' : ''}`}
+                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${mobileSectionsExpanded ? 'rotate-180' : ''}`}
                   />
                 </button>
 
@@ -2959,7 +2937,6 @@ function HeliosPulsePortalInner() {
                   <button
                     type="button"
                     onClick={() => {
-                      setMobileMenuOpen(false);
                       setAiHoverOpen(false);
                       setShowAiDrawer(true);
                     }}
@@ -2995,7 +2972,7 @@ function HeliosPulsePortalInner() {
               </div>
 
               {/* COLLAPSIBLE MOBILE MENU DRAWER */}
-              {mobileMenuOpen && (
+              {mobileSectionsExpanded && (
                 <div className={`lg:hidden pt-2 border-t space-y-2 ${dividerBorder}`}>
                   <nav className="grid grid-cols-2 gap-1.5">
                     {TOP_MENU_ITEMS.map((item) => {
@@ -3004,10 +2981,7 @@ function HeliosPulsePortalInner() {
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => {
-                            setActiveTab(item.id);
-                            setMobileMenuOpen(false);
-                          }}
+                          onClick={() => setActiveTab(item.id)}
                           className={`px-3 py-2 rounded-xl text-xs font-medium text-left transition cursor-pointer truncate ${
                             active
                               ? darkMode
