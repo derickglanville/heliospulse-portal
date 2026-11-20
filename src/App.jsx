@@ -58,7 +58,7 @@ const SYNC_STEPS = [
   { id: 1, title: 'Read Local CSV Sources', detail: 'Load Sunrun_Daily_Production_Data.csv & NYSEG_Daily_Usage_Data.csv' },
   { id: 2, title: 'Aggregate NYSEG Hourly', detail: `Group ${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} hourly Delivered/Received/Weather rows into daily totals` },
   { id: 3, title: 'Validate & Reconcile', detail: 'Enforce Received (M02) <= Solar_production + 0.5 kWh physical bound' },
-  { id: 4, title: 'Anomaly & Gap Detection', detail: `Flag ${TELEMETRY_META.sunrun_only_days} Sunrun-only dates & DST 25-hr interval days` },
+  { id: 4, title: 'Anomaly & Gap Detection', detail: 'Flag NYSEG gaps past 3-day publishing lag & DST 25-hr interval days' },
   { id: 5, title: 'Recompute Credit Bank', detail: 'Extract 2,210 kWh NYSEG statement balance & 12-month forecast' },
   { id: 6, title: 'Publish Sanitized Snapshot', detail: 'Strip PII (Name/Address/Account#) & write telemetryData.json' },
 ];
@@ -1127,14 +1127,40 @@ function HeliosPulsePortalInner() {
 
   const allDetectedAlerts = useMemo(() => {
     const merged = [...appRuntimeIssues, ...(telemetryAlerts || [])];
-    const hasCode = (c) => merged.some((a) => a.code === c);
+
+    const nyTodayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+    const maxRowDate = solarRows.reduce((m, r) => (r.date > m ? r.date : m), nyTodayStr);
+    const lagRef = new Date(`${maxRowDate > nyTodayStr ? maxRowDate : nyTodayStr}T12:00:00Z`);
+    lagRef.setUTCDate(lagRef.getUTCDate() - 3);
+    const nysegLagCutoffDate = lagRef.toISOString().slice(0, 10);
+    const latestReconciledDate = solarRows
+      .filter((r) => r.status === 'RECONCILED')
+      .reduce((m, r) => (r.date > m ? r.date : m), '');
+
+    const filteredMerged = merged
+      .map((a) => {
+        if (a.code !== 'MISSING_NYSEG_INTERVALS' || !Array.isArray(a.dates)) return a;
+        const overdueDates = a.dates.filter(
+          (d) => d >= '2026-07-31' && ((latestReconciledDate && d < latestReconciledDate) || d < nysegLagCutoffDate)
+        );
+        if (overdueDates.length === 0) return null;
+        return {
+          ...a,
+          dates: overdueDates,
+          title: `NYSEG hourly intervals missing for ${overdueDates.length} post-export date(s)`,
+          message: `SunRun solar generation was recorded, but NYSEG smart-meter hourly CSV data is missing beyond the normal 3-day lag for: ${overdueDates.join(', ')}.`,
+        };
+      })
+      .filter(Boolean);
+
+    const hasFilteredCode = (c) => filteredMerged.some((a) => a.code === c);
 
     // Live browser-side anomaly verification (covers CSV upload / payload ingest updates)
     const liveExportExceeds = solarRows
       .filter((r) => r.status === 'RECONCILED' && (r.m02_export_kwh || 0) > (r.solar_kwh || 0) + 0.5)
       .map((r) => r.date);
-    if (liveExportExceeds.length > 0 && !hasCode('EXPORT_EXCEEDS_SOLAR')) {
-      merged.push({
+    if (liveExportExceeds.length > 0 && !hasFilteredCode('EXPORT_EXCEEDS_SOLAR')) {
+      filteredMerged.push({
         code: 'EXPORT_EXCEEDS_SOLAR',
         severity: 'error',
         title: 'NYSEG M02 export exceeds SunRun solar production',
@@ -1144,19 +1170,24 @@ function HeliosPulsePortalInner() {
     }
 
     const liveMissingNyseg = solarRows
-      .filter((r) => r.status === 'SUNRUN_ONLY' && r.date >= '2026-07-31')
+      .filter(
+        (r) =>
+          r.status === 'SUNRUN_ONLY' &&
+          r.date >= '2026-07-31' &&
+          ((latestReconciledDate && r.date < latestReconciledDate) || r.date < nysegLagCutoffDate)
+      )
       .map((r) => r.date);
-    if (liveMissingNyseg.length > 0 && !hasCode('MISSING_NYSEG_INTERVALS')) {
-      merged.push({
+    if (liveMissingNyseg.length > 0 && !hasFilteredCode('MISSING_NYSEG_INTERVALS')) {
+      filteredMerged.push({
         code: 'MISSING_NYSEG_INTERVALS',
         severity: 'warning',
         title: `NYSEG hourly intervals missing for ${liveMissingNyseg.length} post-export date(s)`,
-        message: `Missing NYSEG intervals for: ${liveMissingNyseg.join(', ')}.`,
+        message: `Missing NYSEG intervals beyond the normal 3-day lag for: ${liveMissingNyseg.join(', ')}.`,
         dates: liveMissingNyseg,
       });
     }
 
-    return merged;
+    return filteredMerged;
   }, [appRuntimeIssues, telemetryAlerts, solarRows]);
 
   // Keep a durable lookup log of every detected alert (including canceled/cleared items)

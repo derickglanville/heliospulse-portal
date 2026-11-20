@@ -233,7 +233,17 @@ function classifyIrradiance(solarKwh, dateStr) {
   return 'Overcast';
 }
 
+const NYSEG_EXPECTED_LAG_DAYS = 3;
+const nyLocalTodayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
 const allDates = [...new Set([...srMap.keys(), ...nyMap.keys()])].sort();
+const refDateStr =
+  allDates.length && allDates[allDates.length - 1] > nyLocalTodayStr
+    ? allDates[allDates.length - 1]
+    : nyLocalTodayStr;
+const refDateObj = new Date(`${refDateStr}T12:00:00Z`);
+refDateObj.setUTCDate(refDateObj.getUTCDate() - NYSEG_EXPECTED_LAG_DAYS);
+const nysegLagCutoffDate = refDateObj.toISOString().slice(0, 10);
+const latestReconciledDate = [...nyMap.keys()].sort().pop() || null;
 
 const dailyRows = allDates.map((date, idx) => {
   const sr = srMap.get(date) || { solar_kwh: 0, eod_meter_kwh: 0 };
@@ -312,6 +322,8 @@ const dailyRows = allDates.map((date, idx) => {
       note =
         date < '2026-07-31'
           ? 'Sunrun production logged prior to NYSEG hourly CSV export start (2026-07-31)'
+          : date >= nysegLagCutoffDate && (!latestReconciledDate || date > latestReconciledDate)
+          ? 'Sunrun production verified; within normal 3-day NYSEG publishing lag'
           : 'Sunrun production verified; NYSEG hourly interval export pending for this date';
     }
   } else if (ny.hours !== 24 && !note) {
@@ -428,14 +440,19 @@ if (negativeValueDates.length > 0) {
 }
 
 const missingNysegDates = dailyRows
-  .filter((r) => r.status === 'SUNRUN_ONLY' && r.date >= '2026-07-31')
+  .filter(
+    (r) =>
+      r.status === 'SUNRUN_ONLY' &&
+      r.date >= '2026-07-31' &&
+      ((latestReconciledDate && r.date < latestReconciledDate) || r.date < nysegLagCutoffDate)
+  )
   .map((r) => r.date);
 if (missingNysegDates.length > 0) {
   detectedAnomalies.push({
     code: 'MISSING_NYSEG_INTERVALS',
     severity: 'warning',
     title: `NYSEG hourly intervals missing for ${missingNysegDates.length} post-export date(s)`,
-    message: `SunRun solar generation was recorded, but NYSEG smart-meter hourly CSV data is missing for: ${missingNysegDates.join(', ')}.`,
+    message: `SunRun solar generation was recorded, but NYSEG smart-meter hourly CSV data is missing beyond the normal ${NYSEG_EXPECTED_LAG_DAYS}-day lag for: ${missingNysegDates.join(', ')}.`,
     dates: missingNysegDates,
   });
 }
