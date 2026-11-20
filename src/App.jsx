@@ -5,8 +5,8 @@ import {
   Download, Eye, Layers, Moon, SunMedium,
   Database, Calculator, X,
   Check, Sparkles, Plug, FolderOpen, Upload,
-  ChevronLeft, ChevronRight, Play, Pause, ArrowDown, ArrowUp, Home, Minimize2,
-  Mail, Bell, Clock
+  ChevronLeft, ChevronRight, ChevronDown, Play, Pause, ArrowDown, ArrowUp, Home, Minimize2,
+  Mail, Bell, Clock, Menu
 } from 'lucide-react';
 import telemetryData from './data/telemetryData.json';
 import solarHomeSideImg from './assets/solar-home-side.png';
@@ -208,6 +208,7 @@ class AppErrorBoundary extends React.Component {
 function HeliosPulsePortalInner() {
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('datagrid');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
@@ -2886,10 +2887,129 @@ function HeliosPulsePortalInner() {
 
         {/* CENTER CONTENT COLUMN */}
         <div className="min-w-0 space-y-4">
-          {/* TOP MENU BAR WITH PILL BUTTONS */}
+          {/* TOP MENU BAR WITH COLLAPSIBLE MOBILE NAVIGATION */}
           <header className={`sticky top-0 z-30 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
-            <div className="px-4 sm:px-6 pt-3.5 pb-3 flex flex-wrap items-center justify-between gap-3">
-              <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <div className="px-3 py-2.5 md:px-6 md:pt-3.5 md:pb-3 space-y-2 md:space-y-0 md:flex md:flex-wrap md:items-center md:justify-between md:gap-3">
+              {/* MOBILE COMPACT BAR + MENU TOGGLE */}
+              <div className="flex md:hidden items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen((v) => !v)}
+                  aria-expanded={mobileMenuOpen}
+                  aria-label="Toggle navigation menu"
+                  className={`min-w-0 flex-1 px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center justify-between gap-2 transition cursor-pointer ${
+                    darkMode
+                      ? 'bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800'
+                      : 'bg-[#1a1917] border-[#1a1917] text-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    {mobileMenuOpen ? <X className="w-3.5 h-3.5 shrink-0" /> : <Menu className="w-3.5 h-3.5 shrink-0" />}
+                    <span className="truncate">
+                      {TOP_MENU_ITEMS.find((t) => t.id === activeTab)?.label || 'Menu'}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${mobileMenuOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={triggerSyncPipeline}
+                    disabled={isSyncing}
+                    title="Sync CSV / Published Snapshot"
+                    className={`px-2.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border whitespace-nowrap transition cursor-pointer ${
+                      darkMode
+                        ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:bg-slate-800'
+                        : 'bg-white border-[#dcd8ce] text-[#1f7a4c] hover:bg-[#efece4]'
+                    }`}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Syncing' : 'Sync'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setAiHoverOpen(false);
+                      setShowAiDrawer(true);
+                    }}
+                    aria-label="Open Ask AI"
+                    className={`p-1.5 rounded-full border transition cursor-pointer ${pillBtnSecondary}`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#e07a16]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAlertLogModal(true)}
+                    aria-label="Open Alert Log"
+                    className={`px-2 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border whitespace-nowrap transition cursor-pointer ${pillBtnSecondary}`}
+                  >
+                    <Bell className={`w-3.5 h-3.5 ${combinedAlerts.length > 0 ? 'text-[#e07a16]' : 'text-[#1f7a4c]'}`} />
+                    {alertLookupEntries.length > 0 && (
+                      <span className="font-mono text-[10px] font-bold">({alertLookupEntries.length})</span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDarkMode(!darkMode)}
+                    className={`p-1.5 rounded-full border transition cursor-pointer ${
+                      darkMode ? 'bg-slate-900 border-slate-800 text-amber-400' : 'bg-white border-[#dcd8ce] text-[#5c5953]'
+                    }`}
+                    aria-label="Toggle theme"
+                  >
+                    {darkMode ? <SunMedium className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* COLLAPSIBLE MOBILE MENU DRAWER */}
+              {mobileMenuOpen && (
+                <div className={`md:hidden pt-2 border-t space-y-2 ${dividerBorder}`}>
+                  <nav className="grid grid-cols-2 gap-1.5">
+                    {TOP_MENU_ITEMS.map((item) => {
+                      const active = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setMobileMenuOpen(false);
+                          }}
+                          className={`px-3 py-2 rounded-xl text-xs font-medium text-left transition cursor-pointer truncate ${
+                            active
+                              ? darkMode
+                                ? 'bg-amber-400 text-slate-950 font-semibold shadow-xs'
+                                : 'bg-[#1a1917] text-white font-semibold shadow-xs'
+                              : darkMode
+                              ? 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+                              : 'bg-[#efece4] text-[#1a1917] hover:bg-[#e5e0d5]'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                  <div className="flex items-center justify-between text-[11px] font-mono px-1">
+                    <span className={mutedText}>
+                      Auto-Sync: 7:30 AM{snapshotMeta?.generated_at ? ` · Synced ${snapshotMeta.generated_at.slice(5, 10)}` : ''}
+                    </span>
+                    <span className={mutedText}>
+                      Through {snapshotMeta?.latest_reconciled_date || '—'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* DESKTOP / TABLET NAVIGATION */}
+              <nav className="hidden md:flex flex-wrap items-center gap-1.5 sm:gap-2">
                 {TOP_MENU_ITEMS.map((item) => {
                   const active = activeTab === item.id;
                   return (
@@ -2912,23 +3032,18 @@ function HeliosPulsePortalInner() {
                 })}
               </nav>
 
-              <div className="flex items-center gap-1.5">
+              <div className="hidden md:flex items-center gap-1.5">
                 <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono ${calloutBg}`}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono whitespace-nowrap ${calloutBg}`}
                   title={`Automated Windows Task & GitHub Pages Sync run daily at 7:30 AM EST • Latest snapshot: ${snapshotMeta?.generated_at || 'unknown'}`}
                 >
-                  <span className="md:hidden">
-                    7:30 AM · {snapshotMeta?.generated_at ? snapshotMeta.generated_at.slice(5, 10) : 'Live'}
-                  </span>
-                  <span className="hidden md:inline">
-                    Auto-Sync: 7:30 AM{snapshotMeta?.generated_at ? ` · Synced ${snapshotMeta.generated_at.slice(5, 10)}` : ''}
-                  </span>
+                  Auto-Sync: 7:30 AM{snapshotMeta?.generated_at ? ` · Synced ${snapshotMeta.generated_at.slice(5, 10)}` : ''}
                 </span>
                 <button
                   onClick={triggerSyncPipeline}
                   disabled={isSyncing}
                   title="Run 6-Stage CSV Sync Pipeline (Scheduled daily at 7:30 AM)"
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border whitespace-nowrap transition cursor-pointer ${
                     darkMode
                       ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:bg-slate-800'
                       : 'bg-white border-[#dcd8ce] text-[#1f7a4c] hover:bg-[#efece4]'
@@ -2951,7 +3066,7 @@ function HeliosPulsePortalInner() {
                     }}
                     onFocus={openAiHoverMenu}
                     aria-expanded={aiHoverOpen}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border transition cursor-pointer ${pillBtnSecondary}`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 border whitespace-nowrap transition cursor-pointer ${pillBtnSecondary}`}
                   >
                     <Sparkles className="w-3 h-3 text-[#e07a16]" />
                     <span className="hidden sm:inline">Ask AI</span>
@@ -3005,7 +3120,7 @@ function HeliosPulsePortalInner() {
                 <button
                   type="button"
                   onClick={() => setShowAlertLogModal(true)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border transition cursor-pointer ${pillBtnSecondary}`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border whitespace-nowrap transition cursor-pointer ${pillBtnSecondary}`}
                   title="Open Alert & Anomaly Lookup Log (includes canceled alerts)"
                 >
                   <Bell className={`w-3 h-3 ${combinedAlerts.length > 0 ? 'text-[#e07a16]' : 'text-[#1f7a4c]'}`} />
