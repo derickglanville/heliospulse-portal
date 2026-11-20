@@ -208,7 +208,8 @@ class AppErrorBoundary extends React.Component {
 function HeliosPulsePortalInner() {
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('datagrid');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(true);
+  const [mobileGridSummaryOpen, setMobileGridSummaryOpen] = useState(true);
   const [spanFilter, setSpanFilter] = useState('yearly'); // 'weekly' | 'monthly' | 'yearly'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'RECONCILED' | 'SUNRUN_ONLY'
   const [sortField, setSortField] = useState('date');
@@ -2045,19 +2046,40 @@ function HeliosPulsePortalInner() {
   // Reusable renderer for the Interval Data Grid styled with the Solar Savings standard palette & fonts
   const renderIntervalDataGrid = (isPopOutModal = false) => (
     <div className="space-y-2.5">
-      {/* COMPACT HEADER + TOOLBAR */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight">
-            Reconciled daily interval & cost grid
-          </h1>
-          <span className={`text-xs ${mutedText}`}>
-            Daily register totals @ <strong className="font-semibold">$0.24/kWh</strong>
-          </span>
+      {/* COMPACT HEADER + MOBILE SUMMARY TOGGLE */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight">
+              Reconciled daily interval & cost grid
+            </h1>
+            <span className={`hidden lg:inline text-xs ${mutedText}`}>
+              Daily register totals @ <strong className="font-semibold">$0.24/kWh</strong>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileGridSummaryOpen((v) => !v)}
+            aria-expanded={mobileGridSummaryOpen}
+            className={`lg:hidden px-2.5 py-1 rounded-full border text-[11px] font-semibold flex items-center gap-1 shrink-0 cursor-pointer transition ${pillBtnSecondary}`}
+          >
+            <span>{mobileGridSummaryOpen ? 'Hide Summary' : 'Show Summary'}</span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${mobileGridSummaryOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
         </div>
 
-        {/* TOP BAR: ROW COUNT, VIEW SELECTOR, PERIOD PAGER, DOWNLOAD CSV, POP OUT */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        {/* COLLAPSIBLE CONTROLS + 7-CARD KPI RIBBON ON MOBILE (ALWAYS SHOWN ON LG+) */}
+        <div className={mobileGridSummaryOpen ? 'space-y-2.5' : 'hidden lg:block lg:space-y-2.5'}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className={`lg:hidden text-xs ${mutedText}`}>
+              Daily register totals @ <strong className="font-semibold">$0.24/kWh</strong>
+            </span>
+
+            {/* TOP BAR: ROW COUNT, VIEW SELECTOR, PERIOD PAGER, DOWNLOAD CSV, POP OUT */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="font-mono font-bold text-[#1f7a4c] mr-1">
             {visibleGridRows.length} of {fullIntervalGridRows.length} rows
           </span>
@@ -2139,7 +2161,7 @@ function HeliosPulsePortalInner() {
             )}
           </button>
         </div>
-      </div>
+          </div>
 
       {/* SLIM TEMPORARY NYSEG RECORDS NOTICE BAR (shown only when placeholder rows are active) */}
       {(() => {
@@ -2278,6 +2300,8 @@ function HeliosPulsePortalInner() {
             <span className="px-1 py-px rounded bg-[#1f7a4c]/12 text-[#1f7a4c] text-[9px] font-semibold">Hist</span>
           </div>
           <div className="text-sm font-bold font-mono">${gridSpanKpis.costWithoutSolar}</div>
+        </div>
+      </div>
         </div>
       </div>
 

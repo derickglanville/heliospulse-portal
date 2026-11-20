@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-20T16:07:30.254Z",
+    "generated_at": "2026-11-20T16:15:40.622Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -23,7 +23,7 @@
     "cumulative_net_credit_bank_kwh": 1498.021
   },
   "task_scheduler": {
-    "checkedAt": "2026-11-20 11:07:30",
+    "checkedAt": "2026-11-20 11:15:40",
     "action": "status",
     "target": "both",
     "runResults": [],
@@ -165,7 +165,7 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-20T16:07:30.254Z",
+    "last_checked_at": "2026-11-20T16:15:40.622Z",
     "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []
