@@ -2889,14 +2889,14 @@ function HeliosPulsePortalInner() {
         <div className="min-w-0 space-y-4">
           {/* TOP MENU BAR WITH COLLAPSIBLE MOBILE NAVIGATION */}
           <header className={`sticky top-0 z-30 rounded-2xl border backdrop-blur-md ${darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-[#f6f4ef]/95 border-[#e6e2d8]'}`}>
-            <div className="px-3 py-2.5 md:px-6 md:pt-3.5 md:pb-3 space-y-2 md:space-y-0 md:flex md:flex-wrap md:items-center md:justify-between md:gap-3">
-              {/* MOBILE COMPACT BAR + MENU TOGGLE */}
-              <div className="flex md:hidden items-center justify-between gap-2">
+            <div className="px-3 py-2.5 lg:px-6 lg:pt-3.5 lg:pb-3 space-y-2 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3">
+              {/* MOBILE / TABLET COMPACT BAR + MENU TOGGLE */}
+              <div className="flex lg:hidden items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen((v) => !v)}
                   aria-expanded={mobileMenuOpen}
-                  aria-label="Toggle navigation menu"
+                  aria-label={mobileMenuOpen ? 'Collapse navigation menu' : 'Expand navigation menu'}
                   className={`min-w-0 flex-1 px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center justify-between gap-2 transition cursor-pointer ${
                     darkMode
                       ? 'bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800'
@@ -2906,7 +2906,9 @@ function HeliosPulsePortalInner() {
                   <span className="flex items-center gap-1.5 min-w-0">
                     {mobileMenuOpen ? <X className="w-3.5 h-3.5 shrink-0" /> : <Menu className="w-3.5 h-3.5 shrink-0" />}
                     <span className="truncate">
-                      {TOP_MENU_ITEMS.find((t) => t.id === activeTab)?.label || 'Menu'}
+                      {mobileMenuOpen
+                        ? 'Collapse Menu'
+                        : `Menu · ${TOP_MENU_ITEMS.find((t) => t.id === activeTab)?.label || 'Tabs'}`}
                     </span>
                   </span>
                   <ChevronDown
@@ -2970,7 +2972,7 @@ function HeliosPulsePortalInner() {
 
               {/* COLLAPSIBLE MOBILE MENU DRAWER */}
               {mobileMenuOpen && (
-                <div className={`md:hidden pt-2 border-t space-y-2 ${dividerBorder}`}>
+                <div className={`lg:hidden pt-2 border-t space-y-2 ${dividerBorder}`}>
                   <nav className="grid grid-cols-2 gap-1.5">
                     {TOP_MENU_ITEMS.map((item) => {
                       const active = activeTab === item.id;
@@ -3008,8 +3010,8 @@ function HeliosPulsePortalInner() {
                 </div>
               )}
 
-              {/* DESKTOP / TABLET NAVIGATION */}
-              <nav className="hidden md:flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {/* DESKTOP NAVIGATION */}
+              <nav className="hidden lg:flex flex-wrap items-center gap-1.5 sm:gap-2">
                 {TOP_MENU_ITEMS.map((item) => {
                   const active = activeTab === item.id;
                   return (
@@ -3032,7 +3034,7 @@ function HeliosPulsePortalInner() {
                 })}
               </nav>
 
-              <div className="hidden md:flex items-center gap-1.5">
+              <div className="hidden lg:flex items-center gap-1.5">
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono whitespace-nowrap ${calloutBg}`}
                   title={`Automated Windows Task & GitHub Pages Sync run daily at 7:30 AM EST • Latest snapshot: ${snapshotMeta?.generated_at || 'unknown'}`}
