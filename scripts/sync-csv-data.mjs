@@ -16,6 +16,7 @@ const DEFAULT_HISTORY_JSON = path.join(CODEX_ROOT, 'JSON', 'Solar_Daily_History.
 const sunrunCsvPath = process.env.SUNRUN_CSV_PATH || DEFAULT_SUNRUN_CSV;
 const nysegCsvPath = process.env.NYSEG_CSV_PATH || DEFAULT_NYSEG_CSV;
 const outputJsonPath = path.join(projectRoot, 'src', 'data', 'telemetryData.json');
+const publicJsonPath = path.join(projectRoot, 'public', 'telemetryData.json');
 const notifyEmailScript = path.join(__dirname, 'notify_email.py');
 const shouldSendEmail = process.env.NOTIFY_EMAIL === '1' || process.argv.includes('--notify');
 const pipelineIssues = [];
@@ -38,8 +39,10 @@ if (fs.existsSync(outputJsonPath)) {
 
 if (!fs.existsSync(sunrunCsvPath) || !fs.existsSync(nysegCsvPath)) {
   if (fs.existsSync(outputJsonPath)) {
+    fs.mkdirSync(path.dirname(publicJsonPath), { recursive: true });
+    fs.copyFileSync(outputJsonPath, publicJsonPath);
     console.log(
-      '[sync-csv-data] Local CSV paths not found (CI/build environment). Using existing src/data/telemetryData.json.'
+      '[sync-csv-data] Local CSV paths not found (CI/build environment). Using existing src/data/telemetryData.json -> public/telemetryData.json.'
     );
     process.exit(0);
   }
@@ -658,8 +661,11 @@ const payload = {
   daily_rows: [...dailyRows].reverse(),
 };
 
+const jsonString = JSON.stringify(payload, null, 2);
 fs.mkdirSync(path.dirname(outputJsonPath), { recursive: true });
-fs.writeFileSync(outputJsonPath, JSON.stringify(payload, null, 2), 'utf8');
+fs.writeFileSync(outputJsonPath, jsonString, 'utf8');
+fs.mkdirSync(path.dirname(publicJsonPath), { recursive: true });
+fs.writeFileSync(publicJsonPath, jsonString, 'utf8');
 console.log(
-  `[sync-csv-data] Synced ${dailyRows.length} daily records (${reconciledRows.length} reconciled with NYSEG, ${nysegTotalHours} NYSEG hourly intervals, anomalies=${detectedAnomalies.length}, newSR=${newSunrunRecords.length}, newNY=${newNysegRecords.length}, forecast=${Boolean(payload.credit_bank_forecast)}) -> src/data/telemetryData.json`
+  `[sync-csv-data] Synced ${dailyRows.length} daily records (${reconciledRows.length} reconciled with NYSEG, ${nysegTotalHours} NYSEG hourly intervals, anomalies=${detectedAnomalies.length}, newSR=${newSunrunRecords.length}, newNY=${newNysegRecords.length}, forecast=${Boolean(payload.credit_bank_forecast)}) -> src/data/telemetryData.json + public/telemetryData.json`
 );

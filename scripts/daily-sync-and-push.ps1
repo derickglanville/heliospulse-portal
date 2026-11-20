@@ -12,12 +12,15 @@ $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 Add-Content -Path $logFile -Value "[$timestamp] Starting scheduled 7:30 AM CSV telemetry sync..."
 
 try {
+    # Pull remote commits first so scheduled push to origin/main never rejects due to non-fast-forward
+    git pull --rebase --autostash origin main | Out-String | Add-Content -Path $logFile
+
     $env:NOTIFY_EMAIL = "1"
     node scripts/sync-csv-data.mjs | Out-String | Add-Content -Path $logFile
 
-    $status = git status --porcelain src/data/telemetryData.json
+    $status = git status --porcelain src/data/telemetryData.json public/telemetryData.json
     if ($status) {
-        git add src/data/telemetryData.json
+        git add src/data/telemetryData.json public/telemetryData.json
         $dateStr = Get-Date -Format "yyyy-MM-dd"
         git commit -m "Automated 7:30 AM daily CSV telemetry sync ($dateStr)" | Out-String | Add-Content -Path $logFile
         git push origin main | Out-String | Add-Content -Path $logFile

@@ -1,7 +1,7 @@
 param(
     [ValidateSet("status", "run")]
     [string]$Action = "status",
-    [ValidateSet("both", "sunrun", "nyseg")]
+    [ValidateSet("both", "sunrun", "nyseg", "publish", "all")]
     [string]$Target = "both"
 )
 
@@ -12,7 +12,7 @@ $jobDefs = @(
         key = "sunrun"
         label = "SunRun Production Download"
         taskName = "Sunrun Daily Download and Copy"
-        schedule = "Daily at 7:29 AM"
+        schedule = "Daily at 6:40 AM"
         logDir = "C:\Software Developement\ChatGPT Codex\Solar Energy - SunRun\SunRun Data\Script\automation_logs"
         logPattern = "sunrun_workflow_*.log"
     },
@@ -20,14 +20,25 @@ $jobDefs = @(
         key = "nyseg"
         label = "NYSEG Interval Usage Sync"
         taskName = "Solar Energy Tracker - NYSEG Daily Sync"
-        schedule = "Daily at 7:30 AM"
+        schedule = "Daily at 6:30 AM"
         logFile = "C:\Software Developement\ChatGPT Codex\Solar Energy - SunRun\SunRun Data\nyseg-daily-sync.log"
+    },
+    @{
+        key = "publish"
+        label = "GitHub Pages Mobile Sync & Push"
+        taskName = "HeliosPulse_Daily_730AM_CSV_Sync"
+        schedule = "Daily at 7:30 AM"
+        logFile = "C:\Software Developement\Gemini\Solar\logs\daily-sync.log"
     }
 )
 
 $runResults = @()
 if ($Action -eq "run") {
-    $selectedJobs = $jobDefs | Where-Object { $Target -eq "both" -or $_.key -eq $Target }
+    $selectedJobs = $jobDefs | Where-Object {
+        $Target -eq "all" -or
+        ($Target -eq "both" -and ($_.key -eq "sunrun" -or $_.key -eq "nyseg")) -or
+        $_.key -eq $Target
+    }
     foreach ($def in $selectedJobs) {
         try {
             Start-ScheduledTask -TaskName $def.taskName -ErrorAction Stop

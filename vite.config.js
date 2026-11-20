@@ -35,7 +35,7 @@ function liveCsvAndBillsSyncPlugin() {
 
   const runTaskSchedulerPs = (action = 'status', target = 'both') => {
     const safeAction = action === 'run' ? 'run' : 'status';
-    const safeTarget = ['sunrun', 'nyseg', 'both'].includes(target) ? target : 'both';
+    const safeTarget = ['sunrun', 'nyseg', 'both', 'publish', 'all'].includes(target) ? target : 'both';
     const psOut = execFileSync(
       'powershell',
       [
@@ -105,7 +105,7 @@ function liveCsvAndBillsSyncPlugin() {
       req.on('end', () => {
         try {
           const parsed = JSON.parse(body || '{}');
-          const target = ['sunrun', 'nyseg', 'both'].includes(parsed.target) ? parsed.target : 'both';
+          const target = ['sunrun', 'nyseg', 'both', 'publish', 'all'].includes(parsed.target) ? parsed.target : 'both';
           const data = runTaskSchedulerPs('run', target);
           const runErrors = (data.runResults || []).filter((r) => r.error).map((r) => `${r.taskName}: ${r.error}`);
           sendJson(res, 200, { ok: runErrors.length === 0, errors: runErrors, ...data });

@@ -13,6 +13,7 @@ import solarHomeSideImg from './assets/solar-home-side.png';
 import solarFarmSideImg from './assets/solar-farm-side.png';
 import EnergyCostChartsTab from './components/EnergyCostChartsTab.jsx';
 import NysegMonthlyBillsTab from './components/NysegMonthlyBillsTab.jsx';
+import { answerSolarQuestion } from './utils/solarAiEngine.js';
 
 const INITIAL_SOLAR_DAILY = telemetryData.daily_rows;
 const TELEMETRY_META = telemetryData.metadata;
@@ -78,9 +79,11 @@ const TOP_MENU_ITEMS = [
 ];
 
 const AI_SUGGESTED_QUESTIONS = [
+  'How does the current EDC compare to July about the same time?',
   'How is my NYSEG credit bank & winter forecast?',
   'What will my next NYSEG bill be?',
   'Summarize my NYSEG monthly bills & savings',
+  'Which day had the highest home consumption (EDC)?',
   'What anomalies or data issues are currently detected?',
   'Explain my daily energy distribution & latest grid balance',
   'Compare monthly CSV production & grid exchange',
@@ -211,6 +214,7 @@ function HeliosPulsePortalInner() {
   const [sortAsc, setSortAsc] = useState(false);
 
   const [solarRows, setSolarRows] = useState(INITIAL_SOLAR_DAILY);
+  const [snapshotMeta, setSnapshotMeta] = useState(TELEMETRY_META);
   const [moreBillsData, setMoreBillsData] = useState(telemetryData.more_bills);
   const [creditBankForecastBase, setCreditBankForecastBase] = useState(telemetryData.credit_bank_forecast);
   const [telemetryAlerts, setTelemetryAlerts] = useState(telemetryData.alerts || []);
@@ -831,6 +835,9 @@ function HeliosPulsePortalInner() {
 
   const applyFreshTelemetrySnapshot = (fresh, eventSource = 'sync') => {
     if (!fresh) return;
+    if (fresh.metadata) {
+      setSnapshotMeta(fresh.metadata);
+    }
     if (Array.isArray(fresh.daily_rows)) {
       setSolarRows(fresh.daily_rows);
       if (fresh.metadata?.latest_reconciled_date) {
@@ -944,13 +951,17 @@ function HeliosPulsePortalInner() {
     const labelMap = {
       sunrun: 'Sunrun Daily Download and Copy',
       nyseg: 'Solar Energy Tracker - NYSEG Daily Sync',
+      publish: 'GitHub Pages Mobile Sync & Push (7:30 AM)',
       both: 'SunRun + NYSEG scheduled jobs',
+      all: 'All SunRun, NYSEG & GitHub Pages Sync jobs',
     };
     const psFallbackCmd =
       target === 'sunrun'
         ? 'Start-ScheduledTask -TaskName "Sunrun Daily Download and Copy"'
         : target === 'nyseg'
         ? 'Start-ScheduledTask -TaskName "Solar Energy Tracker - NYSEG Daily Sync"'
+        : target === 'publish'
+        ? 'Start-ScheduledTask -TaskName "HeliosPulse_Daily_730AM_CSV_Sync"'
         : 'Start-ScheduledTask -TaskName "Sunrun Daily Download and Copy"; Start-ScheduledTask -TaskName "Solar Energy Tracker - NYSEG Daily Sync"';
 
     const buildSteps = (overrides = {}) => [
@@ -1463,6 +1474,30 @@ function HeliosPulsePortalInner() {
     );
   };
 
+  const fetchPublishedSnapshotJson = async (eventSource = 'GitHub Pages snapshot') => {
+    try {
+      const resp = await fetch(`/heliospulse-portal/telemetryData.json?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      const ct = resp.headers.get('content-type') || '';
+      if (resp.ok && ct.includes('application/json')) {
+        const fresh = await resp.json();
+        if (Array.isArray(fresh?.daily_rows)) {
+          applyFreshTelemetrySnapshot(fresh, eventSource);
+          if (fresh.metadata?.generated_at) {
+            setLastFolderEvent(
+              `Synced published snapshot (${fresh.metadata.generated_at.slice(0, 16).replace('T', ' ')} UTC • through ${fresh.metadata.latest_reconciled_date || fresh.metadata.latest_sunrun_date}).`
+            );
+          }
+          return true;
+        }
+      }
+    } catch {
+      // Fall back silently if static snapshot fetch fails offline
+    }
+    return false;
+  };
+
   const triggerSyncPipeline = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
@@ -1489,7 +1524,8 @@ function HeliosPulsePortalInner() {
         );
       }
     } catch {
-      // Static GitHub Pages environment uses build-time telemetryData.json
+      // Static GitHub Pages / mobile environment: pull uncached published snapshot JSON
+      await fetchPublishedSnapshotJson('GitHub Pages / mobile refresh');
     }
 
     let step = 1;
@@ -1562,9 +1598,25 @@ function HeliosPulsePortalInner() {
       }, 24 * 60 * 60 * 1000);
     }, computeMsUntilNext730AM());
 
+    let lastMobileAutoCheckMs = Date.now();
+    const refreshIfStaleOnResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      const nowMs = Date.now();
+      if (nowMs - lastMobileAutoCheckMs < 15 * 60 * 1000) return;
+      lastMobileAutoCheckMs = nowMs;
+      fetchPublishedSnapshotJson('mobile auto-check');
+    };
+    document.addEventListener('visibilitychange', refreshIfStaleOnResume);
+    window.addEventListener('focus', refreshIfStaleOnResume);
+
+    // Check uncached GitHub Pages snapshot on initial mobile/static load
+    fetchPublishedSnapshotJson('initial published snapshot check');
+
     return () => {
       window.removeEventListener('error', onWindowError);
       window.removeEventListener('unhandledrejection', onUnhandledRejection);
+      document.removeEventListener('visibilitychange', refreshIfStaleOnResume);
+      window.removeEventListener('focus', refreshIfStaleOnResume);
       clearTimeout(initialTimeout);
       if (dailyInterval) clearInterval(dailyInterval);
     };
@@ -1810,69 +1862,18 @@ function HeliosPulsePortalInner() {
   const handleAskAi = (promptText) => {
     const q = (promptText || aiQuery).trim();
     if (!q) return;
-    const ql = q.toLowerCase();
-    const proj = moreBillsData?.next_bill_projection;
-    const bankNow = moreBillsData?.current_credit_bank_kwh ?? 2210;
-    let reply = '';
-
-    if (ql.includes('next') && ql.includes('bill')) {
-      reply = proj
-        ? `Projected next NYSEG bill (${proj.billing_start_date} to ${proj.billing_end_date}, ${proj.days_in_period} days): $${proj.projected_energy_charge.toFixed(2)} minimum charge floor (${proj.measured_days} measured days through ${proj.measured_through_date} + ${proj.remaining_forecast_days} forecast days). Projected M01 import is ${proj.projected_m01_kwh} kWh vs ${proj.projected_m02_kwh} kWh M02 export (${proj.projected_net_import_kwh} kWh net import), reducing your Credit Bank from ${proj.credit_bank_before_kwh.toLocaleString()} kWh to ${proj.credit_bank_after_kwh.toLocaleString()} kWh (${proj.credit_bank_delta_kwh.toFixed(1)} kWh).`
-        : `Your latest NYSEG bill was $43.57; no next-bill projection is currently loaded.`;
-    } else if (ql.includes('anomal') || ql.includes('issue') || ql.includes('alert') || ql.includes('missing')) {
-      if (combinedAlerts.length === 0) {
-        reply = `No data or application anomalies are currently active. Email alerts to dglanville@gmail.com are armed for missing NYSEG intervals, physical bound violations (M02 > Solar + 0.5 kWh), solar underperformance, and pipeline/app errors.`;
-      } else {
-        const itemsText = combinedAlerts
-          .map((a, idx) => `${idx + 1}) [${a.severity.toUpperCase()}] ${a.title}: ${a.message}`)
-          .join(' ');
-        reply = `${combinedAlerts.length} active alert(s) detected and tracked for email notification to dglanville@gmail.com: ${itemsText}`;
-      }
-    } else if (ql.includes('distribution') || ql.includes('grid balance') || ql.includes('energy flow')) {
-      reply = `On ${distDayMetrics.date} (Energy Distribution), your SunRun array produced ${distDayMetrics.solar} kWh, NYSEG delivered ${distDayMetrics.m01} kWh (M01) and received ${distDayMetrics.m02} kWh (M02), resulting in ${distDayMetrics.homeConsumed} kWh estimated home consumption. Grid dependence was ${distDayMetrics.gridDepPct}% and solar coverage was ${distDayMetrics.solarCovPct}% (${distDayMetrics.co2AvoidedLb} lb CO₂ avoided).`;
-    } else if (ql.includes('credit') || ql.includes('bank') || ql.includes('winter') || ql.includes('forecast')) {
-      const forecastRowsList = liveCreditBankForecast?.rows || [];
-      const minBankRow = forecastRowsList.length
-        ? forecastRowsList.reduce((minR, r) => (r.ending_credit_kwh < minR.ending_credit_kwh ? r : minR), forecastRowsList[0])
-        : null;
-      const historyText = (moreBillsData?.credit_bank_history || [])
-        .map((h) => `${h.period_label.slice(0, 10)}: ${h.remaining_kwh} kWh`)
-        .join(' → ');
-      reply = `Your official NYSEG credit-bank balance is ${bankNow.toLocaleString()} kWh (${historyText || '0 → 2,210 kWh'}). With ${liveCreditBankForecast?.unbilled_reconciled_days ?? 11} reconciled grid days after ${liveCreditBankForecast?.official_period_end || '2026-11-03'} (${(liveCreditBankForecast?.unbilled_net_credit_kwh ?? -138.2).toFixed(1)} kWh), the 12-month forecast opens at ${(liveCreditBankForecast?.opening_projected_kwh ?? 2071.8).toFixed(1)} kWh${minBankRow ? `, reaches its winter low of ${Math.round(minBankRow.ending_credit_kwh).toLocaleString()} kWh in ${minBankRow.month}` : ''}, and ${liveCreditBankForecast?.exhausted_month ? `exhausts in ${liveCreditBankForecast.exhausted_month}` : 'does not exhaust in the next 12 months'}.`;
-    } else if (ql.includes('saved') || ql.includes('saving') || ql.includes('$0.24') || ql.includes('dollar')) {
-      const rate = 0.24;
-      const grossSolarVal = Number(solarTotals.cumSolar) * rate;
-      const exportVal = Number(solarTotals.cumExp) * rate;
-      const selfConsumedKwh = Math.max(0, Number(solarTotals.reconciledSolar) - Number(solarTotals.cumExp));
-      const selfConsumedVal = selfConsumedKwh * rate;
-      reply = `At $0.24/kWh across ${solarTotals.totalDays} days: total solar produced (${Number(solarTotals.cumSolar).toLocaleString()} kWh) equals ~$${grossSolarVal.toFixed(2)} of electricity value. Across ${solarTotals.reconciledCount} NYSEG-reconciled days, M02 exports (${Number(solarTotals.cumExp).toLocaleString()} kWh = $${exportVal.toFixed(2)}) plus direct solar self-consumption (${selfConsumedKwh.toFixed(1)} kWh = $${selfConsumedVal.toFixed(2)}) keep NYSEG post-solar bills at the $43.57 minimum charge floor with +${Number(solarTotals.bankBalance).toLocaleString()} kWh net exported.`;
-    } else if (ql.includes('monthly') && ql.includes('csv')) {
-      const peakMonth = [...MONTHLY_SUMMARIES].sort((a, b) => b.solar_kwh - a.solar_kwh)[0];
-      const summaryLines = MONTHLY_SUMMARIES.map(
-        (m) => `${m.month}: ${m.solar_kwh} kWh solar | ${m.m01_import_kwh} M01 | ${m.m02_export_kwh} M02`
-      ).join(' • ');
-      reply = `Monthly CSV breakdown (newest first): ${summaryLines}.${peakMonth ? ` Peak solar month: ${peakMonth.month} (${peakMonth.solar_kwh.toLocaleString()} kWh).` : ''}`;
-    } else if (ql.includes('bill') || ql.includes('summarize')) {
-      const totalBills = moreBillsData?.total_pdf_files ?? 19;
-      const authCount = moreBillsData?.authoritative_count ?? 17;
-      const latestAuth = (moreBillsData?.bills || []).find((b) => b.is_authoritative);
-      reply = `Analyzed ${totalBills} NYSEG PDF bills (${authCount} unique billing periods) from More Bills. Latest authoritative statement (${latestAuth?.statement_date || '2026-11-05'} for ${latestAuth?.billing_start_date || '2026-10-07'} to ${latestAuth?.billing_end_date || '2026-11-03'}): $${Number(latestAuth?.total_energy_charges ?? 43.57).toFixed(2)} energy charge, ${latestAuth?.imported_kwh ?? 437} kWh M01 import, ${latestAuth?.exported_kwh ?? 591} kWh M02 export, leaving ${bankNow.toLocaleString()} kWh in your Credit Bank.`;
-    } else if (ql.includes('export') || ql.includes('green') || ql.includes('yellow') || ql.includes('m02') || ql.includes('m01')) {
-      const exportDays = reconciledRowsChrono.filter((r) => (r.m02_export_kwh || 0) > (r.m01_import_kwh || 0)).length;
-      const importDays = reconciledRowsChrono.length - exportDays;
-      reply = `Across ${reconciledRowsChrono.length} NYSEG-reconciled days in the Interval Data Grid, ${exportDays} days were net exports (M02 > M01, green rows) and ${importDays} days were net imports (M02 ≤ M01, yellow rows). Reconciled totals: ${Number(solarTotals.cumExp).toLocaleString()} kWh M02 exported vs ${Number(solarTotals.cumImp).toLocaleString()} kWh M01 imported (+${solarTotals.bankBalance} kWh net).`;
-    } else if (ql.includes('best') || ql.includes('lowest') || ql.includes('peak')) {
-      const positiveDays = solarRows.filter((r) => (r.solar_kwh || 0) > 0);
-      const best = positiveDays.length ? positiveDays.reduce((a, b) => (b.solar_kwh > a.solar_kwh ? b : a)) : null;
-      const low = positiveDays.length ? positiveDays.reduce((a, b) => (b.solar_kwh < a.solar_kwh ? b : a)) : null;
-      reply = best && low
-        ? `Best production day: ${best.date} with ${best.solar_kwh.toFixed(1)} kWh (${best.irradiance}). Lowest non-zero day: ${low.date} with ${low.solar_kwh.toFixed(1)} kWh (${low.irradiance}). Cumulative total across ${solarTotals.totalDays} days is ${Number(solarTotals.cumSolar).toLocaleString()} kWh.`
-        : `Total solar production is ${solarTotals.cumSolar} kWh across ${solarTotals.totalDays} days.`;
-    } else if (ql.includes('sync') || ql.includes('schedule') || ql.includes('system') || ql.includes('hardware')) {
-      reply = `System: Sunrun 18.45 kW DC rooftop array (41 panels) + NYSEG Bidirectional Smart Meter. Loaded ${TELEMETRY_META.sunrun_total_rows} SunRun CSV days and ${TELEMETRY_META.nyseg_hourly_rows.toLocaleString()} NYSEG hourly intervals (${solarTotals.reconciledCount} reconciled days, EOD meter ${solarTotals.maxEodMeter} kWh on ${TELEMETRY_META.latest_sunrun_date}). Daily auto-sync is scheduled at 7:30 AM EST with live folder watchers & email alerts to dglanville@gmail.com.`;
-    } else {
-      reply = `Your SunRun array has produced ${Number(solarTotals.cumSolar).toLocaleString()} kWh cumulatively across ${solarTotals.totalDays} CSV days (${solarTotals.reconciledCount} NYSEG-reconciled days: ${Number(solarTotals.cumExp).toLocaleString()} kWh M02 exported vs ${Number(solarTotals.cumImp).toLocaleString()} kWh M01 imported, Official Credit Bank: ${bankNow.toLocaleString()} kWh).`;
-    }
+    const reply = answerSolarQuestion(q, {
+      solarRows,
+      monthlySummaries: MONTHLY_SUMMARIES,
+      moreBillsData,
+      liveCreditBankForecast,
+      combinedAlerts,
+      distDayMetrics,
+      solarTotals,
+      telemetryMeta: snapshotMeta,
+      taskSchedulerData,
+      appliances: APPLIANCES,
+    });
 
     setAiMessages((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: reply }]);
     setAiQuery('');
@@ -2901,10 +2902,15 @@ function HeliosPulsePortalInner() {
 
               <div className="flex items-center gap-1.5">
                 <span
-                  className={`hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono ${calloutBg}`}
-                  title="Automated Windows Task & In-App Scheduler run daily at 7:30 AM EST"
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono ${calloutBg}`}
+                  title={`Automated Windows Task & GitHub Pages Sync run daily at 7:30 AM EST • Latest snapshot: ${snapshotMeta?.generated_at || 'unknown'}`}
                 >
-                  Auto-Sync: 7:30 AM
+                  <span className="md:hidden">
+                    7:30 AM · {snapshotMeta?.generated_at ? snapshotMeta.generated_at.slice(5, 10) : 'Live'}
+                  </span>
+                  <span className="hidden md:inline">
+                    Auto-Sync: 7:30 AM{snapshotMeta?.generated_at ? ` · Synced ${snapshotMeta.generated_at.slice(5, 10)}` : ''}
+                  </span>
                 </span>
                 <button
                   onClick={triggerSyncPipeline}
@@ -4700,7 +4706,7 @@ function HeliosPulsePortalInner() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {(taskSchedulerData?.jobs || []).map((job) => {
                   const isRunning = job.state === 'Running';
                   const isUnavailable = job.state === 'Unavailable' || (!job.lastRunTime && job.lastTaskResult === null);
@@ -4812,11 +4818,21 @@ function HeliosPulsePortalInner() {
                           onClick={() => handleRunScheduledTask(job.key)}
                           disabled={Boolean(runningTaskTarget) || isRunning}
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold text-white transition disabled:opacity-50 ${
-                            job.key === 'sunrun' ? 'bg-[#e07a16] hover:bg-[#c86a10]' : 'bg-[#1f7a4c] hover:bg-[#17613b]'
+                            job.key === 'sunrun'
+                              ? 'bg-[#e07a16] hover:bg-[#c86a10]'
+                              : job.key === 'publish'
+                              ? 'bg-[#0284c7] hover:bg-[#0369a1]'
+                              : 'bg-[#1f7a4c] hover:bg-[#17613b]'
                           }`}
                         >
                           <Play className="w-3 h-3" />
-                          {runningTaskTarget === job.key || isRunning ? 'Running...' : `Run ${job.key === 'sunrun' ? 'SunRun' : 'NYSEG'} Job`}
+                          {runningTaskTarget === job.key || isRunning
+                            ? 'Running...'
+                            : job.key === 'sunrun'
+                            ? 'Run SunRun Job'
+                            : job.key === 'publish'
+                            ? 'Push Mobile Sync'
+                            : 'Run NYSEG Job'}
                         </button>
                       </div>
                     </div>
@@ -5155,7 +5171,7 @@ function HeliosPulsePortalInner() {
                 aiMessages.map((m, idx) => (
                   <div
                     key={idx}
-                    className={`p-3.5 rounded-xl ${
+                    className={`p-3.5 rounded-xl whitespace-pre-line ${
                       m.role === 'user'
                         ? 'bg-[#1a1917] text-white ml-8'
                         : `${calloutBg} mr-6 leading-relaxed`
