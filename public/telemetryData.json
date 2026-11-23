@@ -1,21 +1,21 @@
 {
   "metadata": {
-    "generated_at": "2026-11-22T12:31:07.579Z",
+    "generated_at": "2026-11-23T12:31:21.721Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
     "nyseg_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\NYSEG_Daily_Usage_Data.csv",
-    "sunrun_total_rows": 137,
+    "sunrun_total_rows": 138,
     "nyseg_hourly_rows": 2665,
     "reconciled_days": 111,
-    "sunrun_only_days": 23,
+    "sunrun_only_days": 24,
     "pending_days": 3,
     "date_range_start": "2026-07-09",
-    "date_range_end": "2026-11-22",
+    "date_range_end": "2026-11-23",
     "reconciled_range_start": "2026-07-31",
     "latest_reconciled_date": "2026-11-18",
-    "latest_sunrun_date": "2026-11-20",
-    "cumulative_solar_kwh": 6284.184,
+    "latest_sunrun_date": "2026-11-21",
+    "cumulative_solar_kwh": 6308.799,
     "reconciled_solar_kwh": 4813.104,
     "cumulative_m01_import_kwh": 1939.992,
     "cumulative_m02_export_kwh": 3431.98,
@@ -23,7 +23,7 @@
     "cumulative_net_credit_bank_kwh": 1491.988
   },
   "task_scheduler": {
-    "checkedAt": "2026-11-22 07:31:07",
+    "checkedAt": "2026-11-23 07:31:21",
     "action": "status",
     "target": "both",
     "runResults": [],
@@ -34,36 +34,36 @@
         "taskName": "Sunrun Daily Download and Copy",
         "schedule": "Daily at 6:40 AM",
         "state": "Ready",
-        "lastRunTime": "2026-11-22 06:40:02",
+        "lastRunTime": "2026-11-23 06:40:02",
         "lastTaskResult": 0,
-        "nextRunTime": "2026-11-23 06:40:00",
+        "nextRunTime": "2026-11-24 06:40:00",
         "command": "\"C:\\Program Files\\Python38\\python.exe\" \"C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\run_sunrun_daily.py\" --run",
         "queryError": null,
         "logInfo": {
-          "logFile": "sunrun_workflow_2026-11-22.log",
-          "updatedAt": "2026-11-22 06:41:59",
-          "summary": "[2026-11-22 06:41:59] Email report sent successfully.",
+          "logFile": "sunrun_workflow_2026-11-23.log",
+          "updatedAt": "2026-11-23 06:42:13",
+          "summary": "[2026-11-23 06:42:13] Email report sent successfully.",
           "recentSteps": [
-            "[2026-11-22 06:41:32] sunrun_download_v7.py: [06:41:24] Selected export range 'All Time'.",
-            "[2026-11-22 06:41:32] sunrun_download_v7.py: [06:41:27] Clicking Export and waiting for the CSV download.",
-            "[2026-11-22 06:41:32] sunrun_download_v7.py: [06:41:29] CSV saved successfully: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-22_064128.csv (3,945 bytes)",
-            "[2026-11-22 06:41:32] sunrun_download_v7.py: [06:41:29] Saved current session to: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\sunrun_session.json",
-            "[2026-11-22 06:41:32] sunrun_download_v7.py:",
-            "[2026-11-22 06:41:32] sunrun_download_v7.py: Saved: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-22_064128.csv",
-            "[2026-11-22 06:41:32] sunrun_download_v7.py: [06:41:32] Browser closed.",
-            "[2026-11-22 06:41:32] Completed successfully: sunrun_download_v7.py (88.7 seconds)",
-            "[2026-11-22 06:41:32] Verified downloaded CSV: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-22_064128.csv (3,945 bytes)",
-            "[2026-11-22 06:41:32] Updating cumulative solar JSON.",
-            "[2026-11-22 06:41:32] Cumulative JSON updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Solar_Daily_History.json",
-            "[2026-11-22 06:41:32] Waiting 10 seconds before copy script.",
-            "[2026-11-22 06:41:42] Starting: Copy Daily File From Sunrun.py",
-            "[2026-11-22 06:41:43] Copy Daily File From Sunrun.py: Copied 'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-22_064128.csv' -> 'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv' (3,945 bytes)",
-            "[2026-11-22 06:41:43] Completed successfully: Copy Daily File From Sunrun.py (0.5 seconds)",
-            "[2026-11-22 06:41:57] Created 7 professional chart(s).",
-            "[2026-11-22 06:41:57] Daily workflow completed successfully.",
-            "[2026-11-22 06:41:57] HTML report saved: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\Report\\Sunrun_Report_2026-11-22_064157.html",
-            "[2026-11-22 06:41:59] Email report sent successfully.",
-            "[2026-11-22 06:41:59] Daily load history updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Daily_Load_History.json"
+            "[2026-11-23 06:41:36] sunrun_download_v7.py: [06:41:27] Selected export range 'All Time'.",
+            "[2026-11-23 06:41:36] sunrun_download_v7.py: [06:41:30] Clicking Export and waiting for the CSV download.",
+            "[2026-11-23 06:41:36] sunrun_download_v7.py: [06:41:33] CSV saved successfully: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-23_064131.csv (3,972 bytes)",
+            "[2026-11-23 06:41:36] sunrun_download_v7.py: [06:41:33] Saved current session to: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\sunrun_session.json",
+            "[2026-11-23 06:41:36] sunrun_download_v7.py:",
+            "[2026-11-23 06:41:36] sunrun_download_v7.py: Saved: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-23_064131.csv",
+            "[2026-11-23 06:41:36] sunrun_download_v7.py: [06:41:36] Browser closed.",
+            "[2026-11-23 06:41:36] Completed successfully: sunrun_download_v7.py (92.2 seconds)",
+            "[2026-11-23 06:41:36] Verified downloaded CSV: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-23_064131.csv (3,972 bytes)",
+            "[2026-11-23 06:41:36] Updating cumulative solar JSON.",
+            "[2026-11-23 06:41:36] Cumulative JSON updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Solar_Daily_History.json",
+            "[2026-11-23 06:41:36] Waiting 10 seconds before copy script.",
+            "[2026-11-23 06:41:46] Starting: Copy Daily File From Sunrun.py",
+            "[2026-11-23 06:41:47] Copy Daily File From Sunrun.py: Copied 'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Script\\downloads\\sunrun_production_2026-11-23_064131.csv' -> 'C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv' (3,972 bytes)",
+            "[2026-11-23 06:41:47] Completed successfully: Copy Daily File From Sunrun.py (0.3 seconds)",
+            "[2026-11-23 06:42:10] Created 7 professional chart(s).",
+            "[2026-11-23 06:42:10] Daily workflow completed successfully.",
+            "[2026-11-23 06:42:10] HTML report saved: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\Report\\Sunrun_Report_2026-11-23_064210.html",
+            "[2026-11-23 06:42:13] Email report sent successfully.",
+            "[2026-11-23 06:42:13] Daily load history updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Daily_Load_History.json"
           ]
         }
       },
@@ -72,18 +72,35 @@
         "label": "NYSEG Interval Usage Sync",
         "taskName": "Solar Energy Tracker - NYSEG Daily Sync",
         "schedule": "Daily at 6:30 AM",
-        "state": "Ready",
-        "lastRunTime": "2026-11-22 06:30:02",
-        "lastTaskResult": 0,
-        "nextRunTime": "2026-11-23 06:30:00",
+        "state": "Running",
+        "lastRunTime": "2026-11-23 06:30:01",
+        "lastTaskResult": 267009,
+        "nextRunTime": "2026-11-24 06:30:00",
         "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\NYSEG Download Script\\run_nyseg_daily_sync.ps1\"",
         "queryError": null,
         "logInfo": {
           "logFile": "nyseg-daily-sync.log",
-          "updatedAt": "2026-11-22 06:37:14",
-          "summary": "[2026-11-22T06:37:14] NYSEG 7:30 AM workflow completed successfully on attempt 1/4",
+          "updatedAt": "2026-11-23 07:30:39",
+          "summary": "[nyseg] Saved nyseg_error.html",
           "recentSteps": [
-            "[2026-11-22T06:37:14] NYSEG 7:30 AM workflow completed successfully on attempt 1/4"
+            "[2026-11-23T07:27:23] Retry 3/4: running after 20 minutes",
+            "Step 1/2: Downloading the NYSEG CSV with NYSEG_File_Download_Test.py.",
+            "[nyseg] Attempt 1 of 3",
+            "[nyseg] Step 1/6: Opened NYSEG Insights: https://uplight-external-prd.us.auth0.com/authorize?client_id=0VGfQ5ndUF46fLpTcwgETEeXGm6h",
+            "[nyseg] Login form: UserID field present, password field present.",
+            "[nyseg] Entering username...",
+            "[nyseg] Entering password...",
+            "[nyseg] Timed out waiting for a recognizable page. If a CAPTCHA/MFA is on screen, complete it in the browser and re-run.",
+            "[nyseg] FAILED: Could not reach the insights page after login attempt.",
+            "[nyseg] URL:   https://sso.nyseg.com/login?p_p_id=com_liferay_login_web_portlet_LoginPortlet&p_p_lifecycl",
+            "[nyseg] Saved nyseg_error.png",
+            "[nyseg] Saved nyseg_error.html",
+            "[nyseg] Retrying with a fresh browser in 10 seconds...",
+            "[nyseg] Attempt 2 of 3",
+            "[nyseg] Step 1/6: Opened NYSEG Insights: https://uplight-external-prd.us.auth0.com/authorize?client_id=0VGfQ5ndUF46fLpTcwgETEeXGm6h",
+            "[nyseg] Login form: UserID field present, password field present.",
+            "[nyseg] Entering username...",
+            "[nyseg] Entering password..."
           ]
         }
       },
@@ -93,17 +110,17 @@
         "taskName": "HeliosPulse_Daily_730AM_CSV_Sync",
         "schedule": "Daily at 7:30 AM",
         "state": "Running",
-        "lastRunTime": "2026-11-22 07:30:01",
+        "lastRunTime": "2026-11-23 07:30:01",
         "lastTaskResult": 267009,
-        "nextRunTime": "2026-11-23 07:30:00",
+        "nextRunTime": "2026-11-24 07:30:00",
         "command": "pwsh.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\Software Developement\\Gemini\\Solar\\scripts\\daily-sync-and-push.ps1\"",
         "queryError": null,
         "logInfo": {
           "logFile": "daily-sync.log",
-          "updatedAt": "2026-11-22 07:30:18",
+          "updatedAt": "2026-11-23 07:30:12",
           "summary": "Already up to date.",
           "recentSteps": [
-            "[2026-11-22 07:30:14] Starting scheduled 7:30 AM CSV telemetry sync...",
+            "[2026-11-23 07:30:07] Starting scheduled 7:30 AM CSV telemetry sync...",
             "Already up to date."
           ]
         }
@@ -111,6 +128,15 @@
     ]
   },
   "alerts": [
+    {
+      "code": "MISSING_NYSEG_INTERVALS",
+      "severity": "warning",
+      "title": "NYSEG hourly intervals missing for 1 post-export date(s)",
+      "message": "SunRun solar generation was recorded, but NYSEG smart-meter hourly CSV data is missing beyond the normal 3-day lag for: 2026-11-19.",
+      "dates": [
+        "2026-11-19"
+      ]
+    },
     {
       "code": "SOLAR_UNDERPERFORMANCE",
       "severity": "warning",
@@ -135,6 +161,20 @@
     "emails_dispatched": [],
     "recent_email_events": [
       {
+        "sent_at": "2026-11-23T06:42:11",
+        "recipient": "dglanville@gmail.com",
+        "subject": "[HeliosPulse Sync] New Records Added (1 SunRun)",
+        "status": "sent",
+        "category": "new_records"
+      },
+      {
+        "sent_at": "2026-11-23T06:42:10",
+        "recipient": "dglanville@gmail.com",
+        "subject": "[HeliosPulse Alert] 1 Data/App Anomaly & Issue(s) Detected",
+        "status": "sent",
+        "category": "anomaly_alert"
+      },
+      {
         "sent_at": "2026-11-22T06:42:01",
         "recipient": "dglanville@gmail.com",
         "subject": "[HeliosPulse Sync] New Records Added (1 SunRun)",
@@ -154,23 +194,9 @@
         "subject": "[HeliosPulse Sync] New Records Added (1 NYSEG)",
         "status": "sent",
         "category": "new_records"
-      },
-      {
-        "sent_at": "2026-11-20T08:17:47",
-        "recipient": "dglanville@gmail.com",
-        "subject": "[HeliosPulse Sync] New Records Added (1 NYSEG)",
-        "status": "sent",
-        "category": "new_records"
-      },
-      {
-        "sent_at": "2026-11-20T08:17:46",
-        "recipient": "dglanville@gmail.com",
-        "subject": "[HeliosPulse Alert] 1 Data/App Anomaly & Issue(s) Detected",
-        "status": "sent",
-        "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-22T12:31:07.580Z",
+    "last_checked_at": "2026-11-23T12:31:21.722Z",
     "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []
@@ -178,12 +204,12 @@
   "monthly_summaries": [
     {
       "month": "2026-11",
-      "solar_kwh": 455.01,
+      "solar_kwh": 479.63,
       "m01_import_kwh": 399.82,
       "m02_export_kwh": 200.59,
       "credit_delta": -199.23,
       "reconciled_days": 18,
-      "sunrun_days": 20,
+      "sunrun_days": 21,
       "prior_credit_bank": 1691.2,
       "ending_credit_bank": 1492
     },
@@ -577,7 +603,7 @@
   },
   "more_bills": {
     "source_folder": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\NYSEG Bill\\Bills\\More Bills",
-    "scanned_at": "2026-11-22",
+    "scanned_at": "2026-11-23",
     "total_pdf_files": 19,
     "unique_bill_count": 19,
     "authoritative_count": 17,
@@ -1904,8 +1930,8 @@
   },
   "daily_rows": [
     {
-      "id": "SR-9137",
-      "date": "2026-11-22",
+      "id": "SR-9138",
+      "date": "2026-11-23",
       "solar_kwh": 0,
       "eod_meter_kwh": 0,
       "m01_import_kwh": null,
@@ -1923,10 +1949,29 @@
       "hourly": null
     },
     {
-      "id": "SR-9136",
-      "date": "2026-11-21",
+      "id": "SR-9137",
+      "date": "2026-11-22",
       "solar_kwh": 0,
       "eod_meter_kwh": 0,
+      "m01_import_kwh": null,
+      "m02_export_kwh": null,
+      "credit_delta": null,
+      "temp_f": null,
+      "temp_min_f": 45,
+      "temp_max_f": 62,
+      "irradiance_wm2": 420,
+      "irradiance_source": "Open-Meteo forecast/current-day data for Yorktown Heights, NY",
+      "nyseg_hours": 0,
+      "irradiance": "Fog",
+      "status": "PENDING_TELEMETRY",
+      "note": "Awaiting daily 7:30 AM telemetry sync",
+      "hourly": null
+    },
+    {
+      "id": "SR-9136",
+      "date": "2026-11-21",
+      "solar_kwh": 24.615,
+      "eod_meter_kwh": 6308.8,
       "m01_import_kwh": null,
       "m02_export_kwh": null,
       "credit_delta": null,
@@ -1937,8 +1982,8 @@
       "irradiance_source": "Open-Meteo forecast/current-day data for Yorktown Heights, NY",
       "nyseg_hours": 0,
       "irradiance": "Overcast",
-      "status": "PENDING_TELEMETRY",
-      "note": "Awaiting daily 7:30 AM telemetry sync",
+      "status": "SUNRUN_ONLY",
+      "note": "Sunrun production verified; within normal 3-day NYSEG publishing lag",
       "hourly": null
     },
     {
@@ -1976,7 +2021,7 @@
       "nyseg_hours": 0,
       "irradiance": "Overcast",
       "status": "SUNRUN_ONLY",
-      "note": "Sunrun production verified; within normal 3-day NYSEG publishing lag",
+      "note": "Sunrun production verified; NYSEG hourly interval export pending for this date",
       "hourly": null
     },
     {
