@@ -2085,8 +2085,21 @@ function HeliosPulsePortalInner() {
           <div className="font-mono font-bold text-sm">
             ${Number(row.estimated_charges || 0).toFixed(2)}
           </div>
-          <div className={`text-xs ${mutedText}`}>
-            Credit bank: <span className="font-mono font-medium">{Math.round(row.ending_credit_kwh || 0).toLocaleString()} kWh</span>
+          <div className="pt-0.5">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-sm font-bold ${
+                (row.ending_credit_kwh || 0) <= 0
+                  ? 'bg-[#fef2f2] border-[#fca5a5] text-[#b91c1c]'
+                  : darkMode
+                  ? 'bg-sky-900/50 border-sky-600 text-sky-200'
+                  : 'bg-[#dbeafe]/80 border-[#93c5fd] text-[#1e3a8a]'
+              }`}
+            >
+              <span>Credit bank:</span>
+              <span className="font-mono font-extrabold text-[15px]">
+                {Math.round(row.ending_credit_kwh || 0).toLocaleString()} kWh
+              </span>
+            </span>
           </div>
           <div
             className={`text-xs font-semibold ${
