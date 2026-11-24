@@ -5,8 +5,9 @@ on:
     branches:
       - main
   schedule:
-    # Runs daily at 7:30 AM EST (12:30 UTC)
+    # Runs daily at 7:30 AM EST (12:30 UTC) + backup verify deploy at 7:40 AM EST (12:40 UTC)
     - cron: '30 12 * * *'
+    - cron: '40 12 * * *'
   workflow_dispatch:
 
 permissions:
@@ -24,6 +25,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -216,6 +216,10 @@ function HeliosPulsePortalInner() {
 
   const [solarRows, setSolarRows] = useState(INITIAL_SOLAR_DAILY);
   const [snapshotMeta, setSnapshotMeta] = useState(TELEMETRY_META);
+  const snapshotMetaRef = useRef(TELEMETRY_META);
+  useEffect(() => {
+    snapshotMetaRef.current = snapshotMeta;
+  }, [snapshotMeta]);
   const [moreBillsData, setMoreBillsData] = useState(telemetryData.more_bills);
   const [creditBankForecastBase, setCreditBankForecastBase] = useState(telemetryData.credit_bank_forecast);
   const [telemetryAlerts, setTelemetryAlerts] = useState(telemetryData.alerts || []);
@@ -1581,14 +1585,22 @@ function HeliosPulsePortalInner() {
     window.addEventListener('error', onWindowError);
     window.addEventListener('unhandledrejection', onUnhandledRejection);
 
-    const computeMsUntilNext730AM = () => {
+    const computeMsUntilNext735AM = () => {
       const now = new Date();
       const next = new Date(now);
-      next.setHours(7, 30, 0, 0);
+      next.setHours(7, 35, 0, 0);
       if (now >= next) {
         next.setDate(next.getDate() + 1);
       }
       return next.getTime() - now.getTime();
+    };
+
+    const isSnapshotFromToday = () => {
+      const gen = snapshotMetaRef.current?.generated_at;
+      if (!gen) return false;
+      const genLocal = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(gen));
+      const nowLocal = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+      return genLocal === nowLocal;
     };
 
     let dailyInterval = null;
@@ -1597,15 +1609,25 @@ function HeliosPulsePortalInner() {
       dailyInterval = setInterval(() => {
         triggerSyncPipeline();
       }, 24 * 60 * 60 * 1000);
-    }, computeMsUntilNext730AM());
+    }, computeMsUntilNext735AM());
+
+    // Between 7:32 AM and 8:15 AM local time, check every 5 minutes if today's 7:30 AM sync hasn't arrived yet
+    const morningPollInterval = setInterval(() => {
+      const now = new Date();
+      const mins = now.getHours() * 60 + now.getMinutes();
+      if (mins >= 7 * 60 + 32 && mins <= 8 * 60 + 15 && !isSnapshotFromToday()) {
+        triggerSyncPipeline();
+      }
+    }, 5 * 60 * 1000);
 
     let lastMobileAutoCheckMs = Date.now();
     const refreshIfStaleOnResume = () => {
       if (document.visibilityState === 'hidden') return;
       const nowMs = Date.now();
-      if (nowMs - lastMobileAutoCheckMs < 15 * 60 * 1000) return;
+      const minIntervalMs = isSnapshotFromToday() ? 15 * 60 * 1000 : 60 * 1000;
+      if (nowMs - lastMobileAutoCheckMs < minIntervalMs) return;
       lastMobileAutoCheckMs = nowMs;
-      fetchPublishedSnapshotJson('mobile auto-check');
+      triggerSyncPipeline();
     };
     document.addEventListener('visibilitychange', refreshIfStaleOnResume);
     window.addEventListener('focus', refreshIfStaleOnResume);
@@ -1619,6 +1641,7 @@ function HeliosPulsePortalInner() {
       document.removeEventListener('visibilitychange', refreshIfStaleOnResume);
       window.removeEventListener('focus', refreshIfStaleOnResume);
       clearTimeout(initialTimeout);
+      clearInterval(morningPollInterval);
       if (dailyInterval) clearInterval(dailyInterval);
     };
   }, []);

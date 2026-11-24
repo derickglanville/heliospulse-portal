@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-24T12:30:53.682Z",
+    "generated_at": "2026-11-24T13:39:25.931Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -23,7 +23,7 @@
     "cumulative_net_credit_bank_kwh": 1466.967
   },
   "task_scheduler": {
-    "checkedAt": "2026-11-24 07:30:53",
+    "checkedAt": "2026-11-24 08:39:25",
     "action": "status",
     "target": "both",
     "runResults": [],
@@ -65,7 +65,8 @@
             "[2026-11-24 06:42:39] Email report sent successfully.",
             "[2026-11-24 06:42:39] Daily load history updated: C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\JSON\\Daily_Load_History.json"
           ]
-        }
+        },
+        "liveQueryNote": "Exception calling \"ProcessRecord\" with \"1\" argument(s): \"Access to a CIM resource was not available to the client.\""
       },
       {
         "key": "nyseg",
@@ -85,28 +86,29 @@
           "recentSteps": [
             "[2026-11-24T06:39:16] NYSEG 7:30 AM workflow completed successfully on attempt 1/4"
           ]
-        }
+        },
+        "liveQueryNote": "Exception calling \"ProcessRecord\" with \"1\" argument(s): \"Access to a CIM resource was not available to the client.\""
       },
       {
         "key": "publish",
         "label": "GitHub Pages Mobile Sync & Push",
         "taskName": "HeliosPulse_Daily_730AM_CSV_Sync",
         "schedule": "Daily at 7:30 AM",
-        "state": "Running",
+        "state": "Ready",
         "lastRunTime": "2026-11-24 07:30:01",
-        "lastTaskResult": 267009,
+        "lastTaskResult": 0,
         "nextRunTime": "2026-11-25 07:30:00",
         "command": "pwsh.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"C:\\Software Developement\\Gemini\\Solar\\scripts\\daily-sync-and-push.ps1\"",
         "queryError": null,
         "logInfo": {
           "logFile": "daily-sync.log",
-          "updatedAt": "2026-11-24 07:30:11",
-          "summary": "Already up to date.",
+          "updatedAt": "2026-11-24 07:31:07",
+          "summary": "[2026-11-24 07:31:07] Pushed updated telemetryData.json to origin/main (GitHub Pages deploy triggered).",
           "recentSteps": [
-            "[2026-11-24 07:30:07] Starting scheduled 7:30 AM CSV telemetry sync...",
-            "Already up to date."
+            "[2026-11-24 07:31:07] Pushed updated telemetryData.json to origin/main (GitHub Pages deploy triggered)."
           ]
-        }
+        },
+        "liveQueryNote": "Exception calling \"ProcessRecord\" with \"1\" argument(s): \"Access to a CIM resource was not available to the client.\""
       }
     ]
   },
@@ -127,7 +129,7 @@
   ],
   "notification_status": {
     "recipient": "dglanville@gmail.com",
-    "should_send": true,
+    "should_send": false,
     "unsent_anomaly_count": 0,
     "new_sunrun_count": 0,
     "new_nyseg_count": 0,
@@ -170,7 +172,7 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-24T12:30:53.682Z",
+    "last_checked_at": "2026-11-24T13:39:25.931Z",
     "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []
