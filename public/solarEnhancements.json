@@ -1,0 +1,41 @@
+[
+  {
+    "id": "ENH-001",
+    "date": "2026-07-09",
+    "title": "Sunrun 18.45 kW DC Rooftop Array Commissioning",
+    "category": "Array / Hardware",
+    "status": "Completed",
+    "priority": "High",
+    "impact": "18.45 kW DC (41 panels) baseline",
+    "cost": "",
+    "description": "Commissioned 41-panel Sunrun rooftop solar array and began daily production CSV logging.",
+    "notes": "Verified baseline generation in Sunrun_Daily_Production_Data.csv.",
+    "updatedAt": "2026-07-09T12:00:00Z"
+  },
+  {
+    "id": "ENH-002",
+    "date": "2026-07-31",
+    "title": "NYSEG Bidirectional Smart Meter Interval Export",
+    "category": "Metering & Grid",
+    "status": "Completed",
+    "priority": "High",
+    "impact": "Hourly M01 / M02 net-metering tracking",
+    "cost": "",
+    "description": "Activated hourly smart-meter CSV telemetry tracking Grid Delivered (M01) and Surplus Received (M02).",
+    "notes": "Supports full daily EDC = Solar + M01 - M02 reconciliation.",
+    "updatedAt": "2026-07-31T12:00:00Z"
+  },
+  {
+    "id": "ENH-003",
+    "date": "2026-11-18",
+    "title": "HeliosPulse Automated 7:30 AM Sync & Mobile Portal",
+    "category": "Monitoring & Portal",
+    "status": "Completed",
+    "priority": "Medium",
+    "impact": "Daily automated reporting & anomaly alerts",
+    "cost": "",
+    "description": "Configured automated 7:30 AM daily CSV reconciliation, Open-Meteo irradiance backfill, credit-bank forecasting, and mobile GitHub Pages deployment.",
+    "notes": "Email alerts routed to dglanville@gmail.com.",
+    "updatedAt": "2026-11-18T12:00:00Z"
+  }
+]

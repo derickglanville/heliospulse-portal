@@ -13,6 +13,8 @@ import solarHomeSideImg from './assets/solar-home-side.png';
 import solarFarmSideImg from './assets/solar-farm-side.png';
 import EnergyCostChartsTab from './components/EnergyCostChartsTab.jsx';
 import NysegMonthlyBillsTab from './components/NysegMonthlyBillsTab.jsx';
+import EnhancementsTab from './components/EnhancementsTab.jsx';
+import initialSolarEnhancements from './data/solarEnhancements.json';
 import { answerSolarQuestion } from './utils/solarAiEngine.js';
 
 const INITIAL_SOLAR_DAILY = telemetryData.daily_rows;
@@ -75,6 +77,7 @@ const TOP_MENU_ITEMS = [
   { id: 'flow', label: 'Energy flow' },
   { id: 'nyseg', label: 'NYSEG record' },
   { id: 'connectors', label: 'CSV connectors' },
+  { id: 'enhancements', label: 'Enhancements' },
   { id: 'system', label: 'Your system' },
 ];
 
@@ -224,6 +227,17 @@ function HeliosPulsePortalInner() {
   const [creditBankForecastBase, setCreditBankForecastBase] = useState(telemetryData.credit_bank_forecast);
   const [telemetryAlerts, setTelemetryAlerts] = useState(telemetryData.alerts || []);
   const [notificationStatus, setNotificationStatus] = useState(telemetryData.notification_status || null);
+  const [enhancementEntries, setEnhancementEntries] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('heliospulse_solar_enhancements_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return Array.isArray(initialSolarEnhancements) ? initialSolarEnhancements : [];
+  });
+  const [enhancementSyncNote, setEnhancementSyncNote] = useState('');
   const [taskSchedulerData, setTaskSchedulerData] = useState(telemetryData.task_scheduler || null);
   const [runningTaskTarget, setRunningTaskTarget] = useState(null); // null | 'sunrun' | 'nyseg' | 'both'
   const [taskStatusLoading, setTaskStatusLoading] = useState(false);
@@ -948,6 +962,43 @@ function HeliosPulsePortalInner() {
     }
     return null;
   };
+
+  const handleSaveEnhancements = async (nextEntries) => {
+    setEnhancementEntries(nextEntries);
+    try {
+      window.localStorage.setItem('heliospulse_solar_enhancements_v1', JSON.stringify(nextEntries));
+    } catch {}
+    try {
+      const resp = await fetchLocalRunnerApi('/heliospulse-portal/api/enhancements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: nextEntries }),
+      });
+      if (resp.ok) {
+        setEnhancementSyncNote('Saved to project JSON & browser');
+        return;
+      }
+    } catch {
+      // Static GitHub Pages / mobile saves cleanly to browser localStorage
+    }
+    setEnhancementSyncNote('Saved in browser storage');
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'enhancements') return;
+    fetchLocalRunnerApi('/heliospulse-portal/api/enhancements')
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data) => {
+        if (data?.ok && Array.isArray(data.items)) {
+          setEnhancementEntries(data.items);
+          try {
+            window.localStorage.setItem('heliospulse_solar_enhancements_v1', JSON.stringify(data.items));
+          } catch {}
+          setEnhancementSyncNote('Synced with project JSON');
+        }
+      })
+      .catch(() => {});
+  }, [activeTab]);
 
   const handleRunScheduledTask = async (target = 'both') => {
     if (runningTaskTarget) return;
@@ -5107,7 +5158,22 @@ function HeliosPulsePortalInner() {
           </div>
         )}
 
-        {/* TAB 9: YOUR SYSTEM */}
+        {/* TAB 9: SOLAR PRODUCTION & ENHANCEMENTS */}
+        {activeTab === 'enhancements' && (
+          <EnhancementsTab
+            entries={enhancementEntries}
+            onSaveEntries={handleSaveEnhancements}
+            syncStatusMessage={enhancementSyncNote}
+            darkMode={darkMode}
+            cardBg={cardBg}
+            calloutBg={calloutBg}
+            mutedText={mutedText}
+            dividerBorder={dividerBorder}
+            pillBtnSecondary={pillBtnSecondary}
+          />
+        )}
+
+        {/* TAB 10: YOUR SYSTEM */}
         {activeTab === 'system' && (
           <div className="space-y-6">
             <div className="space-y-2.5 max-w-2xl">

@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-11-24T13:39:25.931Z",
+    "generated_at": "2026-11-24T15:57:36.231Z",
     "sync_schedule": "Daily at 7:30 AM America/New_York",
     "location": "Yorktown Heights / Jefferson Valley, NY 10598",
     "sunrun_source_path": "C:\\Software Developement\\ChatGPT Codex\\Solar Energy - SunRun\\SunRun Data\\Sunrun_Daily_Production_Data.csv",
@@ -23,7 +23,7 @@
     "cumulative_net_credit_bank_kwh": 1466.967
   },
   "task_scheduler": {
-    "checkedAt": "2026-11-24 08:39:25",
+    "checkedAt": "2026-11-24 10:57:36",
     "action": "status",
     "target": "both",
     "runResults": [],
@@ -172,7 +172,7 @@
         "category": "anomaly_alert"
       }
     ],
-    "last_checked_at": "2026-11-24T13:39:25.931Z",
+    "last_checked_at": "2026-11-24T15:57:36.232Z",
     "new_sunrun_dates": [],
     "new_nyseg_dates": [],
     "new_bill_files": []
@@ -1933,10 +1933,10 @@
       "m02_export_kwh": null,
       "credit_delta": null,
       "temp_f": null,
-      "temp_min_f": 44,
+      "temp_min_f": 42,
       "temp_max_f": 66,
       "irradiance_wm2": 459,
-      "irradiance_source": "Open-Meteo forecast/current-day data for Yorktown Heights, NY",
+      "irradiance_source": "Open-Meteo daily entry (application_data_current.json)",
       "nyseg_hours": 0,
       "irradiance": "Overcast",
       "status": "PENDING_TELEMETRY",
@@ -1955,7 +1955,7 @@
       "temp_min_f": 45,
       "temp_max_f": 62,
       "irradiance_wm2": 420,
-      "irradiance_source": "Open-Meteo forecast/current-day data for Yorktown Heights, NY",
+      "irradiance_source": "Open-Meteo daily entry (application_data_current.json)",
       "nyseg_hours": 0,
       "irradiance": "Fog",
       "status": "SUNRUN_ONLY",
@@ -2090,7 +2090,7 @@
       "temp_min_f": 37,
       "temp_max_f": 66,
       "irradiance_wm2": 487,
-      "irradiance_source": "Open-Meteo daily entry (application_data_current.json)",
+      "irradiance_source": "Open-Meteo forecast/current-day data for Yorktown Heights, NY",
       "nyseg_hours": 24,
       "irradiance": "Overcast",
       "status": "RECONCILED",
@@ -2206,7 +2206,7 @@
       "temp_min_f": 31,
       "temp_max_f": 63,
       "irradiance_wm2": 504,
-      "irradiance_source": "Open-Meteo daily entry (application_data_current.json)",
+      "irradiance_source": "Open-Meteo forecast/current-day data for Yorktown Heights, NY",
       "nyseg_hours": 24,
       "irradiance": "Overcast",
       "status": "RECONCILED",

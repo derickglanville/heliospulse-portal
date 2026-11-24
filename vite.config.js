@@ -115,6 +115,45 @@ function liveCsvAndBillsSyncPlugin() {
       });
     });
 
+    middlewares.use('/heliospulse-portal/api/enhancements', (req, res) => {
+      const dataPath = path.resolve('src/data/solarEnhancements.json');
+      const publicPath = path.resolve('public/solarEnhancements.json');
+      if (req.method === 'GET') {
+        try {
+          const items = fs.existsSync(dataPath) ? JSON.parse(fs.readFileSync(dataPath, 'utf8')) : [];
+          sendJson(res, 200, { ok: true, items: Array.isArray(items) ? items : [] });
+        } catch (err) {
+          sendJson(res, 500, { ok: false, error: err.message });
+        }
+        return;
+      }
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { ok: false, error: 'Method Not Allowed' });
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body || '{}');
+          if (!Array.isArray(parsed.items)) {
+            sendJson(res, 400, { ok: false, error: 'Expected { items: [...] }' });
+            return;
+          }
+          const formatted = JSON.stringify(parsed.items, null, 2) + '\n';
+          fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+          fs.writeFileSync(dataPath, formatted, 'utf8');
+          fs.mkdirSync(path.dirname(publicPath), { recursive: true });
+          fs.writeFileSync(publicPath, formatted, 'utf8');
+          sendJson(res, 200, { ok: true, items: parsed.items });
+        } catch (err) {
+          sendJson(res, 500, { ok: false, error: err.message });
+        }
+      });
+    });
+
     middlewares.use('/heliospulse-portal/api/report-issue', (req, res) => {
       if (req.method !== 'POST') {
         sendJson(res, 405, { error: 'Method Not Allowed' });
