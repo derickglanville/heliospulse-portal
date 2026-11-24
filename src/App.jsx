@@ -77,7 +77,7 @@ const TOP_MENU_ITEMS = [
   { id: 'flow', label: 'Energy flow' },
   { id: 'nyseg', label: 'NYSEG record' },
   { id: 'connectors', label: 'CSV connectors' },
-  { id: 'enhancements', label: 'Enhancements & Notes' },
+  { id: 'enhancements', label: 'Notes & Enhancements' },
   { id: 'system', label: 'Your system' },
 ];
 

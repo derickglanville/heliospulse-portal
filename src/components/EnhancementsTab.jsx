@@ -269,7 +269,7 @@ export default function EnhancementsTab({
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div className="space-y-2 max-w-2xl">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Solar production notes &amp; enhancements
+            Notes &amp; Enhancements
           </h1>
           <p className={`text-sm sm:text-[15px] leading-relaxed ${mutedText}`}>
             Track hardware upgrades, inverter tuning, panel maintenance, weather/production observations, and system improvements with add, edit, and delete controls.
